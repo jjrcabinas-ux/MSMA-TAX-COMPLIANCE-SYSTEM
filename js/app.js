@@ -37,11 +37,19 @@ function render(){
   });
   $("taxParent").classList.toggle("active", !!TAX_PAGES[view]);
   const el = $("mainContent");
-  if(view === "dashboard")       el.innerHTML = renderDashboard();
-  else if(view === "masterlist") el.innerHTML = renderMasterlist();
-  else if(view === "reporting")  el.innerHTML = renderReporting();
-  else if(view === "auditlog")   el.innerHTML = renderAuditLog();
-  else                           el.innerHTML = renderTaxPage(view);
+  const syncBanner = fbEnabled() ? "" :
+    `<div class="sync-setup-banner">
+       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 16px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+       <span><b>Real-time sync is not active.</b> Data saved on this device will not appear on other devices.
+       To enable cross-device sync, fill in your Firebase credentials in
+       <code>js/firebase-config.js</code> — see the instructions at the top of that file, or visit
+       <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a>.</span>
+     </div>`;
+  if(view === "dashboard")       el.innerHTML = syncBanner + renderDashboard();
+  else if(view === "masterlist") el.innerHTML = syncBanner + renderMasterlist();
+  else if(view === "reporting")  el.innerHTML = syncBanner + renderReporting();
+  else if(view === "auditlog")   el.innerHTML = syncBanner + renderAuditLog();
+  else                           el.innerHTML = syncBanner + renderTaxPage(view);
   wirePageEvents();
   if(view === "reporting") wireReportingEvents();
   if(view === "auditlog")  wireAuditEvents();

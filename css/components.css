@@ -180,6 +180,20 @@ tbody tr:hover{background:#fafcfc;}
 .audit-detail{font-size:.82rem; color:var(--ink-soft);}
 .audit-empty{padding:44px 20px; text-align:center; color:var(--muted);}
 
+/* =================== SYNC SETUP BANNER =================== */
+.sync-setup-banner{
+  display:flex; gap:10px; align-items:flex-start;
+  background:#fff8e1; color:#7c5800;
+  border:1px solid #f5d87e; border-radius:10px;
+  padding:11px 14px; font-size:.84rem; line-height:1.5;
+  margin-bottom:18px;
+}
+.sync-setup-banner a{color:var(--accent); font-weight:600;}
+.sync-setup-banner code{
+  background:#fef0c0; border-radius:4px; padding:1px 5px;
+  font-size:.82em; font-family:monospace;
+}
+
 /* =================== MEDIA QUERIES =================== */
 @media (max-width:860px){
   body #appScreen .sidebar{width:var(--sidebar-w-min);}

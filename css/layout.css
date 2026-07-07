@@ -48,6 +48,10 @@
   background:var(--red-bg); color:var(--red);
 }
 .sync-status.error::before{ background:var(--red); }
+.sync-status.not-configured{
+  background:#f0f0f0; color:#888;
+}
+.sync-status.not-configured::before{ background:#bbb; }
 
 /* =================== SIDEBAR =================== */
 .sidebar{

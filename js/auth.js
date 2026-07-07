@@ -75,12 +75,12 @@ function setSyncStatus(state){
   const el = $("syncStatus");
   if(!el) return;
   el.className = "sync-status " + state;
-  const labels = { hidden:"", connecting:"Connecting…", synced:"Synced", error:"Sync error" };
+  const labels = { hidden:"", connecting:"Connecting…", synced:"Synced", error:"Sync error", "not-configured":"Sync not set up" };
   el.textContent = labels[state] ?? "";
 }
 
 function initFirebaseSync(cl){
-  if(!fbEnabled()){ setSyncStatus("hidden"); return; }
+  if(!fbEnabled()){ setSyncStatus("not-configured"); return; }
   setSyncStatus("connecting");
   try {
     if(!fbApp){
