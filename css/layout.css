@@ -1,0 +1,81 @@
+/* =================== APP CHROME =================== */
+#appScreen{display:none;}
+.topbar{
+  position:fixed; top:0; left:0; right:0; height:56px; z-index:40;
+  background:var(--surface); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:12px; padding:0 16px;
+}
+.hamburger{
+  width:40px; height:40px; border:none; background:transparent; border-radius:50%;
+  display:grid; place-items:center; color:var(--ink-soft);
+}
+.hamburger:hover{background:var(--paper);}
+.brand{display:flex; align-items:baseline; gap:8px; white-space:nowrap;}
+.brand .word{font-weight:700; letter-spacing:.4px;}
+.brand .app{color:var(--muted); font-size:.92rem;}
+.topbar .spacer{flex:1;}
+.cluster-chip{
+  font-size:.76rem; font-weight:700; color:var(--accent-deep); background:var(--accent-soft);
+  padding:4px 12px; border-radius:999px; letter-spacing:.04em;
+}
+.pst-clock{font-size:.85rem; color:var(--muted); white-space:nowrap;}
+.pst-clock b{color:var(--ink-soft); font-weight:600;}
+.logout-btn{
+  border:1px solid var(--line); background:var(--surface); border-radius:8px;
+  padding:6px 12px; font-size:.82rem; font-weight:600; color:var(--ink-soft);
+}
+.logout-btn:hover{border-color:var(--red); color:var(--red);}
+
+/* =================== SIDEBAR =================== */
+.sidebar{
+  position:fixed; top:56px; bottom:0; left:0; width:var(--sidebar-w); z-index:30;
+  background:var(--surface); border-right:1px solid var(--line);
+  padding:12px 8px; overflow-y:auto; transition:width .18s ease;
+  display:flex; flex-direction:column;
+}
+body.nav-min .sidebar{width:var(--sidebar-w-min);}
+.nav-item{
+  display:flex; align-items:center; gap:14px; width:100%;
+  border:none; background:transparent; text-align:left;
+  padding:10px 14px; border-radius:0 999px 999px 0;
+  color:var(--ink-soft); font-weight:500; white-space:nowrap; overflow:hidden;
+}
+.nav-item:hover{background:var(--paper);}
+.nav-item.active{background:var(--accent-soft); color:var(--accent-deep); font-weight:700;}
+.nav-item .ico{flex:0 0 20px; width:20px; height:20px;}
+.nav-item .chev{
+  margin-left:auto; transition:transform .5s ease; flex:0 0 16px; width:16px; height:16px;
+}
+.nav-item.open .chev{transform:rotate(180deg);}
+body.nav-min .nav-item .label, body.nav-min .nav-item .chev{display:none;}
+
+/* dropdown: vertical window closing at .5s */
+.submenu{
+  overflow:hidden; max-height:0; transition:max-height .5s ease;
+}
+.submenu.open{max-height:240px;}
+.submenu .nav-item{padding-left:48px; font-size:.92rem;}
+body.nav-min .submenu .nav-item{padding-left:14px;}
+.nav-bottom{margin-top:auto; border-top:1px solid var(--line); padding-top:8px;}
+
+/* =================== MAIN =================== */
+.main{margin:56px 0 0 var(--sidebar-w); padding:22px 26px 60px; transition:margin .18s ease;}
+body.nav-min .main{margin-left:var(--sidebar-w-min);}
+.page-head{display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-bottom:18px;}
+.page-head h1{font-size:1.35rem; font-weight:700; letter-spacing:.2px;}
+.page-head .sub{color:var(--muted); font-size:.9rem; width:100%;}
+.period-nav{display:flex; align-items:center; gap:6px; margin-left:auto;}
+.period-nav button{
+  border:1px solid var(--line); background:var(--surface); border-radius:8px;
+  width:34px; height:34px; color:var(--ink-soft);
+}
+.period-nav .period-label{
+  border:1px solid var(--line); background:var(--surface); border-radius:8px;
+  padding:6px 14px; font-weight:600; min-width:150px; text-align:center;
+}
+.subtabs{display:flex; gap:8px; margin-bottom:16px;}
+.subtab{
+  border:1px solid var(--line); background:var(--surface); border-radius:999px;
+  padding:7px 16px; font-weight:600; font-size:.86rem; color:var(--ink-soft);
+}
+.subtab.active{background:var(--ink); border-color:var(--ink); color:#fff;}
