@@ -26,6 +26,29 @@
 }
 .logout-btn:hover{border-color:var(--red); color:var(--red);}
 
+/* Sync status indicator */
+.sync-status{
+  font-size:.78rem; font-weight:600; white-space:nowrap;
+  padding:4px 10px; border-radius:999px;
+  display:flex; align-items:center; gap:5px;
+}
+.sync-status::before{
+  content:""; display:inline-block; width:7px; height:7px; border-radius:50%; flex-shrink:0;
+}
+.sync-status.hidden{ display:none; }
+.sync-status.connecting{
+  background:var(--amber-bg); color:var(--amber);
+}
+.sync-status.connecting::before{ background:var(--amber); }
+.sync-status.synced{
+  background:var(--green-bg); color:var(--green);
+}
+.sync-status.synced::before{ background:var(--green); }
+.sync-status.error{
+  background:var(--red-bg); color:var(--red);
+}
+.sync-status.error::before{ background:var(--red); }
+
 /* =================== SIDEBAR =================== */
 .sidebar{
   position:fixed; top:56px; bottom:0; left:0; width:var(--sidebar-w); z-index:30;

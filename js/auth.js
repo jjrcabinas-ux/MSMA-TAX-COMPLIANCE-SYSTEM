@@ -48,7 +48,105 @@ function loadDb(){
     }
   });
 }
-function save(){ store.set(dbKey(), JSON.stringify(db)); }
+function save(){
+  store.set(dbKey(), JSON.stringify(db));
+  fbWrite();
+}
+
+/* ============================================================
+   Firebase Realtime Database sync
+   · Gracefully no-ops when FIREBASE_CONFIG holds placeholder values
+   · Each cluster has its own node: clusters/{cluster}
+   · Data written as a single JSON blob (same shape as localStorage)
+   · onValue listener merges incoming remote data into db and
+     re-renders only when no overlay is open (avoids disrupting edits)
+============================================================ */
+const FB_PLACEHOLDER = "YOUR_API_KEY";
+let fbApp = null, fbDb = null, fbRef = null, fbUnsubscribe = null;
+let _fbReady = false;     // true once Firebase Auth sign-in completes
+let _fbWritePending = false;
+
+function fbEnabled(){
+  return typeof FIREBASE_CONFIG !== "undefined" &&
+         FIREBASE_CONFIG.apiKey !== FB_PLACEHOLDER;
+}
+
+function setSyncStatus(state){
+  const el = $("syncStatus");
+  if(!el) return;
+  el.className = "sync-status " + state;
+  const labels = { hidden:"", connecting:"Connecting…", synced:"Synced", error:"Sync error" };
+  el.textContent = labels[state] ?? "";
+}
+
+function initFirebaseSync(cl){
+  if(!fbEnabled()){ setSyncStatus("hidden"); return; }
+  setSyncStatus("connecting");
+  try {
+    if(!fbApp){
+      fbApp = firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    fbDb = firebase.database(fbApp);
+
+    firebase.auth(fbApp).signInAnonymously()
+      .then(()=>{
+        _fbReady = true;
+        fbRef = fbDb.ref("clusters/" + cl);
+
+        // Listen for remote changes
+        fbUnsubscribe = fbRef.on("value", snapshot=>{
+          const remote = snapshot.val();
+          if(!remote) {
+            // No remote data yet — push our local data up
+            if(db) fbWrite();
+            setSyncStatus("synced");
+            return;
+          }
+          // Merge remote into db (remote wins as source of truth)
+          const merged = Object.assign({ clients:[], records:{}, auditLog:[] }, remote);
+          if(!merged.auditLog) merged.auditLog = [];
+          // Persist to localStorage
+          store.set(dbKey(), JSON.stringify(merged));
+          db = merged;
+          setSyncStatus("synced");
+          // Only re-render if no overlay is open (don't interrupt edits)
+          const anyOpen = document.querySelector(".overlay.open");
+          if(!anyOpen && typeof render === "function") render();
+        }, err=>{
+          console.error("Firebase sync error:", err);
+          setSyncStatus("error");
+        });
+
+        // Flush any write that happened before auth completed
+        if(_fbWritePending){ _fbWritePending = false; fbWrite(); }
+      })
+      .catch(err=>{
+        console.error("Firebase anonymous sign-in failed:", err);
+        setSyncStatus("error");
+      });
+  } catch(err){
+    console.error("Firebase init error:", err);
+    setSyncStatus("error");
+  }
+}
+
+function stopFirebaseSync(){
+  if(fbRef && fbUnsubscribe){
+    fbRef.off("value", fbUnsubscribe);
+    fbRef = null; fbUnsubscribe = null;
+  }
+  _fbReady = false;
+  setSyncStatus("hidden");
+}
+
+function fbWrite(){
+  if(!fbEnabled() || !db) return;
+  if(!_fbReady){ _fbWritePending = true; return; }
+  setSyncStatus("connecting");
+  fbDb.ref("clusters/" + cluster).set(db)
+    .then(()=>setSyncStatus("synced"))
+    .catch(err=>{ console.error("Firebase write error:", err); setSyncStatus("error"); });
+}
 
 /* ============================================================
    Login flow
@@ -95,8 +193,10 @@ function enterApp(cl){
   $("loginPw").value = "";
   view = "dashboard";
   render();
+  initFirebaseSync(cluster);
 }
 $("btnLogout").onclick = ()=>{
+  stopFirebaseSync();
   session.del("msma_cluster");
   cluster = null; db = null;
   $("appScreen").style.display = "none";
