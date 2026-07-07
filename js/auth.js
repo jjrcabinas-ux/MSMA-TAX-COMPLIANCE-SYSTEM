@@ -37,9 +37,9 @@ function dbKey(){ return `msma_taxcomp_v1_${cluster}`; }
 function loadDb(){
   try { db = JSON.parse(store.get(dbKey())) || null; } catch(e){ db = null; }
   if(!db) db = { clients:[], records:{}, auditLog:[] };
+  if(!db.auditLog) db.auditLog = [];   // migrate: ensure auditLog exists before any operation
   if(!db.clients) db.clients = [];
   if(!db.records) db.records = {};
-  if(!db.auditLog) db.auditLog = [];
   // migrate any clients saved under the old "WTE" tag to "EWT"
   db.clients.forEach(c=>{
     if(c.taxTypes && "WTE" in c.taxTypes){

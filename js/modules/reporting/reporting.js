@@ -1,28 +1,24 @@
 "use strict";
 /* ============================================================
-   Reporting module — export functions and reports page
+   Reporting module — shared export helpers, sidebar button, reports page
 ============================================================ */
 
-/* ---- Export current view (sidebar button) ---- */
-$("navExport").onclick = ()=>{
-  let ret, filename, list;
-  if(view === "masterlist" || view === "dashboard"){
-    // export masterlist
-    const head = ["Client","TIN","RDO","Registered Address","Channel","EFPS Group","WTC","EWT","VAT","IT","Associate in charge","Reviewer/Senior associate in charge","Notes"];
-    const lines = [head.join(",")];
-    [...db.clients].sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
-      const tt = c.taxTypes||{};
-      lines.push([c.name,c.tin,c.rdo,c.address||"",c.channel,c.efpsGroup||"",
-        tt.WTC?"Y":"", tt.EWT?"Y":"", tt.VAT?"Y":"", tt.IT?"Y":"",
-        c.preparer||"", c.reviewer||"", c.notes||""
-      ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
-    });
-    downloadCsv(lines, `MSMA_${cluster}_masterlist.csv`);
-    return;
-  }
-  ret = activeReturn[view];
-  const p = periods[ret];
-  list = clientsFor(view);
+/* ---- Shared export helpers (used by both sidebar and reports page) ---- */
+function exportMasterlistCsv(){
+  const head = ["Client","TIN","RDO","Registered Address","Channel","EFPS Group","WTC","EWT","VAT","IT","Associate in charge","Reviewer/Senior associate in charge","Notes"];
+  const lines = [head.join(",")];
+  [...db.clients].sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
+    const tt = c.taxTypes||{};
+    lines.push([c.name,c.tin,c.rdo,c.address||"",c.channel,c.efpsGroup||"",
+      tt.WTC?"Y":"", tt.EWT?"Y":"", tt.VAT?"Y":"", tt.IT?"Y":"",
+      c.preparer||"", c.reviewer||"", c.notes||""
+    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
+  });
+  downloadCsv(lines, `MSMA_${cluster}_masterlist.csv`);
+}
+
+function exportFilingCsv(ret, p){
+  const list = clientsFor(RETURNS[ret].tax);
   const head = ["Client","TIN","RDO","Channel","EFPS Group","Associate in charge","Reviewer/Senior associate in charge","Stage","Flag","Tax Due","FRN",
                 ...STEPS.map(s=>s.label+" date"),"Notes"];
   const lines = [head.join(",")];
@@ -37,6 +33,16 @@ $("navExport").onclick = ()=>{
     ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
   });
   downloadCsv(lines, `MSMA_${cluster}_${RETURNS[ret].form.replace(/[\/ ]/g,"")}_${periodKey(ret,p)}.csv`);
+}
+
+/* ---- Export current view (sidebar button) ---- */
+$("navExport").onclick = ()=>{
+  if(view === "masterlist" || view === "dashboard"){
+    exportMasterlistCsv();
+    return;
+  }
+  const ret = activeReturn[view];
+  exportFilingCsv(ret, periods[ret]);
 };
 
 /* ---- Reports page ---- */
@@ -94,39 +100,10 @@ function renderReporting(){
 /* ---- Wire reporting page buttons (called after render) ---- */
 function wireReportingEvents(){
   const ml = $("rptExportMasterlist");
-  if(ml) ml.onclick = ()=>{
-    const head = ["Client","TIN","RDO","Registered Address","Channel","EFPS Group","WTC","EWT","VAT","IT","Associate in charge","Reviewer/Senior associate in charge","Notes"];
-    const lines = [head.join(",")];
-    [...db.clients].sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
-      const tt = c.taxTypes||{};
-      lines.push([c.name,c.tin,c.rdo,c.address||"",c.channel,c.efpsGroup||"",
-        tt.WTC?"Y":"", tt.EWT?"Y":"", tt.VAT?"Y":"", tt.IT?"Y":"",
-        c.preparer||"", c.reviewer||"", c.notes||""
-      ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
-    });
-    downloadCsv(lines, `MSMA_${cluster}_masterlist.csv`);
-  };
+  if(ml) ml.onclick = exportMasterlistCsv;
 
   document.querySelectorAll(".rpt-filing-btn").forEach(btn=>{
-    btn.onclick = ()=>{
-      const ret = btn.dataset.ret;
-      const p = periods[ret];
-      const list = clientsFor(RETURNS[ret].tax);
-      const head = ["Client","TIN","RDO","Channel","EFPS Group","Associate in charge","Reviewer/Senior associate in charge","Stage","Flag","Tax Due","FRN",
-                    ...STEPS.map(s=>s.label+" date"),"Notes"];
-      const lines = [head.join(",")];
-      list.forEach(c=>{
-        const rec = getRecord(ret, p, c.id);
-        const flag = flagFor(ret, c, p, rec);
-        lines.push([
-          c.name, c.tin, c.rdo, c.channel, c.efpsGroup||"", c.preparer||"", c.reviewer||"",
-          rec.stage>=STEPS.length ? "Archived" : rec.stage===0 ? "Not started" : STEPS[rec.stage-1].label,
-          flag.text, rec.taxDue||"", rec.ref||"",
-          ...STEPS.map(s=>rec.dates[s.key]||""), rec.notes||""
-        ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
-      });
-      downloadCsv(lines, `MSMA_${cluster}_${RETURNS[ret].form.replace(/[\/ ]/g,"")}_${periodKey(ret,p)}.csv`);
-    };
+    btn.onclick = ()=> exportFilingCsv(btn.dataset.ret, periods[btn.dataset.ret]);
   });
 
   const ar = $("rptExportAtRisk");
