@@ -73,7 +73,7 @@ function renderTaxPage(taxType){
     <div class="page-head">
       <h1>${page.title}</h1>
       <div class="period-nav">
-        <button id="prevPeriod" aria-label="Previous period">‹</button>
+        <button id="prevPeriod" aria-label="Previous period" ${isAtMinPeriod(ret, p) ? "disabled" : ""}>‹</button>
         <div class="period-label">${periodLabel(ret,p)}</div>
         <button id="nextPeriod" aria-label="Next period">›</button>
       </div>

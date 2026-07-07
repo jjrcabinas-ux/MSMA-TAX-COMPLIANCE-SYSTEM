@@ -17,7 +17,7 @@ function wirePageEvents(){
   if(TAX_PAGES[view]){
     const ret = activeReturn[view];
     const pv = $("prevPeriod"), nx = $("nextPeriod");
-    if(pv) pv.onclick = ()=>{ periods[ret] = shiftPeriod(ret, periods[ret], -1); render(); };
+    if(pv) pv.onclick = ()=>{ if(!isAtMinPeriod(ret, periods[ret])){ periods[ret] = shiftPeriod(ret, periods[ret], -1); render(); } };
     if(nx) nx.onclick = ()=>{ periods[ret] = shiftPeriod(ret, periods[ret], 1); render(); };
     document.querySelectorAll(".subtab").forEach(b=>{
       b.onclick = ()=>{ activeReturn[view] = b.dataset.ret; render(); };

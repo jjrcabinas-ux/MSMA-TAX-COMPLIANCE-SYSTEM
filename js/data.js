@@ -14,6 +14,9 @@ const STEPS = [
 ];
 const EFPS_DAYS = {A:15,B:14,C:13,D:12,E:11};
 
+// Earliest trackable year — no returns or tasks are created before this year
+const YEAR_FLOOR = 2026;
+
 // freq: M (monthly), Q (quarterly), A (annual)
 const RETURNS = {
   "1601C":  { tax:"WTC", form:"1601-C",      name:"Withholding Tax on Compensation",  freq:"M" },
@@ -48,25 +51,47 @@ function shiftPeriod(ret, p, dir){
   if(f==="M"){
     let m=p.m+dir, y=p.y;
     if(m<1){m=12;y--;} if(m>12){m=1;y++;}
-    return {y,m};
+    const next = {y,m};
+    return (dir===-1 && next.y < YEAR_FLOOR) ? minPeriod(ret) : next;
   }
   if(f==="Q"){
     let q=p.q+dir, y=p.y;
     if(q<1){q=4;y--;} if(q>4){q=1;y++;}
-    return {y,q};
+    const next = {y,q};
+    return (dir===-1 && next.y < YEAR_FLOOR) ? minPeriod(ret) : next;
   }
-  return {y:p.y+dir};
+  const next = {y:p.y+dir};
+  return (dir===-1 && next.y < YEAR_FLOOR) ? minPeriod(ret) : next;
 }
-// default period = latest CLOSED period as of PST today
+// returns the earliest allowed period for a return (January/Q1/TY of YEAR_FLOOR)
+function minPeriod(ret){
+  const f = RETURNS[ret].freq;
+  if(f==="M") return {y:YEAR_FLOOR, m:1};
+  if(f==="Q") return {y:YEAR_FLOOR, q:1};
+  return {y:YEAR_FLOOR};
+}
+// true when p is the earliest allowed period
+function isAtMinPeriod(ret, p){
+  const f = RETURNS[ret].freq;
+  if(f==="M") return p.y === YEAR_FLOOR && p.m === 1;
+  if(f==="Q") return p.y === YEAR_FLOOR && p.q === 1;
+  return p.y === YEAR_FLOOR;
+}
+// default period = latest CLOSED period as of PST today, clamped to YEAR_FLOOR
 function defaultPeriod(ret){
   const t = nowPST();
   const f = RETURNS[ret].freq;
-  if(f==="M") return t.m===1 ? {y:t.y-1,m:12} : {y:t.y,m:t.m-1};
+  if(f==="M"){
+    const p = t.m===1 ? {y:t.y-1,m:12} : {y:t.y,m:t.m-1};
+    return p.y < YEAR_FLOOR ? minPeriod(ret) : p;
+  }
   if(f==="Q"){
     const curQ = Math.floor((t.m-1)/3)+1;
-    return curQ===1 ? {y:t.y-1,q:4} : {y:t.y,q:curQ-1};
+    const p = curQ===1 ? {y:t.y-1,q:4} : {y:t.y,q:curQ-1};
+    return p.y < YEAR_FLOOR ? minPeriod(ret) : p;
   }
-  return {y:t.y-1};
+  const p = {y:t.y-1};
+  return p.y < YEAR_FLOOR ? minPeriod(ret) : p;
 }
 // deadline: returns {file:{y,m,d}, pay:{y,m,d}}
 function deadlineFor(ret, client, p){
