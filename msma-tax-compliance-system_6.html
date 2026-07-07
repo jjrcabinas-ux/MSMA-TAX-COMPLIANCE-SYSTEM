@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSMA Tax Compliance System</title>
+<style>
+  :root{
+    --ink:#1c2733; --ink-soft:#42505e; --muted:#7a8794;
+    --paper:#f4f6f8; --surface:#ffffff; --line:#e2e8ee;
+    --accent:#0f766e; --accent-soft:#e6f3f1; --accent-deep:#0b5a54;
+    --amber:#b45309; --amber-bg:#fdf3e3;
+    --red:#b91c1c; --red-bg:#fdecec;
+    --green:#15803d; --green-bg:#e9f6ee;
+    --blue:#1d4ed8; --blue-bg:#e9effc;
+    --radius:10px;
+    --sidebar-w:248px; --sidebar-w-min:64px;
+    font-size:15px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:"Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    background:var(--paper); color:var(--ink); min-height:100vh;
+  }
+  button{font:inherit; cursor:pointer;}
+  input,select,textarea{font:inherit; color:var(--ink);}
+
+  /* =================== LOGIN =================== */
+  #loginScreen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1000px 500px at 85% -10%, rgba(15,118,110,.14), transparent 60%),
+      radial-gradient(800px 420px at -10% 110%, rgba(29,78,216,.10), transparent 60%),
+      var(--paper);
+    padding:24px;
+  }
+  .login-card{
+    width:100%; max-width:420px; background:var(--surface);
+    border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 22px 60px rgba(15,25,35,.12);
+    padding:34px 32px 30px;
+  }
+  .login-card .logo{
+    width:52px; height:52px; border-radius:12px; background:var(--accent);
+    color:#fff; display:grid; place-items:center; font-weight:800; letter-spacing:.5px;
+    margin-bottom:18px; font-size:.8rem;
+  }
+  .login-card h1{font-size:1.28rem; letter-spacing:.2px;}
+  .login-card .tag{color:var(--muted); font-size:.86rem; margin:4px 0 24px;}
+  .cluster-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px;}
+  .cluster-opt{
+    border:1.5px solid var(--line); border-radius:12px; background:var(--surface);
+    padding:14px 8px; text-align:center; color:var(--ink-soft); font-weight:700;
+    transition:border-color .15s, background .15s;
+  }
+  .cluster-opt small{display:block; font-weight:500; color:var(--muted); font-size:.7rem; margin-top:3px;}
+  .cluster-opt:hover{border-color:var(--accent);}
+  .cluster-opt.sel{border-color:var(--accent); background:var(--accent-soft); color:var(--accent-deep);}
+  .login-field{margin-bottom:14px;}
+  .login-field label{display:block; font-size:.78rem; font-weight:600; color:var(--ink-soft); margin-bottom:6px;}
+  .pw-wrap{position:relative;}
+  .pw-wrap input{
+    width:100%; padding:11px 44px 11px 13px; border:1.5px solid var(--line); border-radius:10px; outline:none;
+  }
+  .pw-wrap input:focus{border-color:var(--accent);}
+  /* hide the browser's built-in password reveal (Edge) so only our toggle shows */
+  .pw-wrap input::-ms-reveal,
+  .pw-wrap input::-ms-clear{display:none;}
+  .pw-wrap .eye{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    border:none; background:transparent; color:var(--muted); width:34px; height:34px; border-radius:8px;
+  }
+  .pw-wrap .eye:hover{background:var(--paper);}
+  .login-btn{
+    width:100%; padding:12px; border:none; border-radius:10px; background:var(--accent);
+    color:#fff; font-weight:700; letter-spacing:.2px; margin-top:4px;
+  }
+  .login-btn:hover{background:var(--accent-deep);}
+  .login-err{
+    color:var(--red); background:var(--red-bg); border-radius:8px; font-size:.82rem;
+    padding:9px 12px; margin-bottom:12px; display:none;
+  }
+  .login-err.show{display:block; animation:shake .3s;}
+  @keyframes shake{ 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+  .login-foot{margin-top:18px; text-align:center; font-size:.74rem; color:var(--muted);}
+
+  /* =================== APP CHROME =================== */
+  #appScreen{display:none;}
+  .topbar{
+    position:fixed; top:0; left:0; right:0; height:56px; z-index:40;
+    background:var(--surface); border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:12px; padding:0 16px;
+  }
+  .hamburger{
+    width:40px; height:40px; border:none; background:transparent; border-radius:50%;
+    display:grid; place-items:center; color:var(--ink-soft);
+  }
+  .hamburger:hover{background:var(--paper);}
+  .brand{display:flex; align-items:baseline; gap:8px; white-space:nowrap;}
+  .brand .word{font-weight:700; letter-spacing:.4px;}
+  .brand .app{color:var(--muted); font-size:.92rem;}
+  .topbar .spacer{flex:1;}
+  .cluster-chip{
+    font-size:.76rem; font-weight:700; color:var(--accent-deep); background:var(--accent-soft);
+    padding:4px 12px; border-radius:999px; letter-spacing:.04em;
+  }
+  .pst-clock{font-size:.85rem; color:var(--muted); white-space:nowrap;}
+  .pst-clock b{color:var(--ink-soft); font-weight:600;}
+  .logout-btn{
+    border:1px solid var(--line); background:var(--surface); border-radius:8px;
+    padding:6px 12px; font-size:.82rem; font-weight:600; color:var(--ink-soft);
+  }
+  .logout-btn:hover{border-color:var(--red); color:var(--red);}
+
+  /* =================== SIDEBAR =================== */
+  .sidebar{
+    position:fixed; top:56px; bottom:0; left:0; width:var(--sidebar-w); z-index:30;
+    background:var(--surface); border-right:1px solid var(--line);
+    padding:12px 8px; overflow-y:auto; transition:width .18s ease;
+    display:flex; flex-direction:column;
+  }
+  body.nav-min .sidebar{width:var(--sidebar-w-min);}
+  .nav-item{
+    display:flex; align-items:center; gap:14px; width:100%;
+    border:none; background:transparent; text-align:left;
+    padding:10px 14px; border-radius:0 999px 999px 0;
+    color:var(--ink-soft); font-weight:500; white-space:nowrap; overflow:hidden;
+  }
+  .nav-item:hover{background:var(--paper);}
+  .nav-item.active{background:var(--accent-soft); color:var(--accent-deep); font-weight:700;}
+  .nav-item .ico{flex:0 0 20px; width:20px; height:20px;}
+  .nav-item .chev{
+    margin-left:auto; transition:transform .5s ease; flex:0 0 16px; width:16px; height:16px;
+  }
+  .nav-item.open .chev{transform:rotate(180deg);}
+  body.nav-min .nav-item .label, body.nav-min .nav-item .chev{display:none;}
+
+  /* dropdown: vertical window closing at .5s */
+  .submenu{
+    overflow:hidden; max-height:0; transition:max-height .5s ease;
+  }
+  .submenu.open{max-height:240px;}
+  .submenu .nav-item{padding-left:48px; font-size:.92rem;}
+  body.nav-min .submenu .nav-item{padding-left:14px;}
+  .nav-bottom{margin-top:auto; border-top:1px solid var(--line); padding-top:8px;}
+
+  /* =================== MAIN =================== */
+  .main{margin:56px 0 0 var(--sidebar-w); padding:22px 26px 60px; transition:margin .18s ease;}
+  body.nav-min .main{margin-left:var(--sidebar-w-min);}
+  .page-head{display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-bottom:18px;}
+  .page-head h1{font-size:1.35rem; font-weight:700; letter-spacing:.2px;}
+  .page-head .sub{color:var(--muted); font-size:.9rem; width:100%;}
+  .period-nav{display:flex; align-items:center; gap:6px; margin-left:auto;}
+  .period-nav button{
+    border:1px solid var(--line); background:var(--surface); border-radius:8px;
+    width:34px; height:34px; color:var(--ink-soft);
+  }
+  .period-nav .period-label{
+    border:1px solid var(--line); background:var(--surface); border-radius:8px;
+    padding:6px 14px; font-weight:600; min-width:150px; text-align:center;
+  }
+  .subtabs{display:flex; gap:8px; margin-bottom:16px;}
+  .subtab{
+    border:1px solid var(--line); background:var(--surface); border-radius:999px;
+    padding:7px 16px; font-weight:600; font-size:.86rem; color:var(--ink-soft);
+  }
+  .subtab.active{background:var(--ink); border-color:var(--ink); color:#fff;}
+
+  .stat-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px;}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px;}
+  .stat .n{font-size:1.5rem; font-weight:700;}
+  .stat .l{font-size:.8rem; color:var(--muted); margin-top:2px;}
+  .stat.flag-red .n{color:var(--red);}
+  .stat.flag-amber .n{color:var(--amber);}
+  .stat.flag-green .n{color:var(--green);}
+
+  .toolbar{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; align-items:center;}
+  .toolbar input[type=search]{
+    flex:1; min-width:180px; padding:9px 14px; border:1px solid var(--line);
+    border-radius:999px; background:var(--surface); outline:none;
+  }
+  .toolbar input[type=search]:focus{border-color:var(--accent);}
+  .toolbar select{padding:9px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface);}
+  .btn{border:none; border-radius:8px; padding:9px 16px; font-weight:600; background:var(--accent); color:#fff;}
+  .btn:hover{background:var(--accent-deep);}
+  .btn.ghost{background:var(--surface); color:var(--ink-soft); border:1px solid var(--line);}
+  .btn.ghost:hover{background:var(--paper);}
+
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; margin-bottom:18px;}
+  .card .card-title{
+    padding:12px 16px; border-bottom:1px solid var(--line); font-weight:700; font-size:.95rem;
+    display:flex; align-items:center; gap:10px;
+  }
+  .card .card-title .pill{
+    font-size:.7rem; font-weight:700; padding:2px 9px; border-radius:999px;
+    background:var(--accent-soft); color:var(--accent-deep);
+  }
+  table{width:100%; border-collapse:collapse;}
+  thead th{
+    text-align:left; font-size:.74rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:#fbfcfd; white-space:nowrap;
+  }
+  tbody td{padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#fafcfc;}
+  .cname{font-weight:600; cursor:pointer;}
+  .cname:hover{color:var(--accent); text-decoration:underline;}
+  .cmeta{font-size:.78rem; color:var(--muted); margin-top:2px;}
+  .chan{display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.03em; padding:2px 8px; border-radius:999px;}
+  .chan.ebir{background:var(--blue-bg); color:var(--blue);}
+  .chan.efps{background:var(--accent-soft); color:var(--accent-deep);}
+  .taxtag{
+    display:inline-block; font-size:.68rem; font-weight:700; padding:2px 7px; border-radius:6px;
+    background:var(--paper); color:var(--ink-soft); border:1px solid var(--line); margin-right:3px;
+  }
+  .due{font-variant-numeric:tabular-nums; white-space:nowrap; font-size:.86rem;}
+  .flagchip{display:inline-flex; align-items:center; gap:5px; font-size:.75rem; font-weight:700; padding:3px 9px; border-radius:999px; white-space:nowrap;}
+  .flagchip.red{background:var(--red-bg); color:var(--red);}
+  .flagchip.amber{background:var(--amber-bg); color:var(--amber);}
+  .flagchip.green{background:var(--green-bg); color:var(--green);}
+  .flagchip.grey{background:var(--paper); color:var(--muted);}
+
+  .pipe{display:flex; gap:3px; align-items:center;}
+  .pipe .step{
+    width:22px; height:22px; border-radius:6px; border:1px solid var(--line);
+    background:var(--surface); display:grid; place-items:center;
+    font-size:.62rem; font-weight:700; color:var(--muted); position:relative;
+  }
+  .pipe .step.done{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .pipe .step.next{border-color:var(--accent); color:var(--accent-deep); border-style:dashed;}
+  .pipe .step:hover::after{
+    content:attr(data-tip); position:absolute; bottom:130%; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; font-size:.7rem; font-weight:500; padding:4px 8px;
+    border-radius:6px; white-space:nowrap; z-index:5;
+  }
+  .pipe-actions{display:flex; gap:4px; margin-left:8px;}
+  .pipe-actions button{
+    border:1px solid var(--line); background:var(--surface); border-radius:6px;
+    width:24px; height:24px; font-size:.8rem; color:var(--ink-soft); line-height:1;
+  }
+  .pipe-actions button:hover{border-color:var(--accent); color:var(--accent-deep);}
+  .status-word{font-size:.78rem; color:var(--ink-soft); margin-top:4px;}
+
+  .empty{padding:44px 20px; text-align:center; color:var(--muted);}
+  .empty b{color:var(--ink-soft);}
+
+  /* summary tiles on dashboard */
+  .ret-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin-bottom:22px;}
+  .ret-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px; cursor:pointer; transition:border-color .15s, box-shadow .15s;
+  }
+  .ret-card:hover{border-color:var(--accent); box-shadow:0 4px 14px rgba(15,118,110,.08);}
+  .ret-card .rc-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px;}
+  .ret-card .rc-form{font-weight:800; font-size:1.05rem;}
+  .ret-card .rc-tax{font-size:.7rem; font-weight:700; color:var(--accent-deep); background:var(--accent-soft); padding:2px 8px; border-radius:999px;}
+  .ret-card .rc-period{font-size:.78rem; color:var(--muted); margin-bottom:12px;}
+  .ret-card .rc-bar{height:8px; border-radius:999px; background:var(--paper); overflow:hidden; margin-bottom:10px; display:flex;}
+  .ret-card .rc-bar i{display:block; height:100%;}
+  .ret-card .rc-nums{display:flex; gap:14px; font-size:.78rem; color:var(--ink-soft); flex-wrap:wrap;}
+  .ret-card .rc-nums b{font-size:.95rem;}
+  .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px;}
+
+  /* =================== MODALS =================== */
+  .overlay{
+    position:fixed; inset:0; background:rgba(20,28,36,.45); z-index:60;
+    display:none; align-items:flex-start; justify-content:center; padding:56px 16px; overflow-y:auto;
+  }
+  .overlay.open{display:flex;}
+  .modal{background:var(--surface); border-radius:14px; width:100%; max-width:640px; box-shadow:0 18px 50px rgba(15,25,35,.25);}
+  .modal header{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line); cursor:move; user-select:none;}
+  .modal header h2{font-size:1.05rem;}
+  /* dropdown checklist */
+  .dd{position:relative;}
+  .dd-btn{
+    width:100%; text-align:left; padding:8px 34px 8px 11px; border:1px solid var(--line);
+    border-radius:8px; background:#fff; color:var(--ink); position:relative;
+  }
+  .dd-btn:focus{border-color:var(--accent); outline:none;}
+  .dd-btn.placeholder{color:var(--muted);}
+  .dd-btn::after{
+    content:""; position:absolute; right:12px; top:50%; width:8px; height:8px;
+    border-right:2px solid var(--muted); border-bottom:2px solid var(--muted);
+    transform:translateY(-70%) rotate(45deg); transition:transform .2s ease;
+  }
+  .dd.open .dd-btn::after{transform:translateY(-30%) rotate(-135deg);}
+  .dd-panel{
+    position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:10;
+    background:#fff; border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 10px 26px rgba(15,25,35,.14); padding:6px;
+    overflow:hidden; max-height:0; opacity:0; pointer-events:none;
+    transition:max-height .5s ease, opacity .2s ease;
+  }
+  .dd.open .dd-panel{max-height:220px; opacity:1; pointer-events:auto;}
+  .dd-panel label{
+    display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:7px;
+    font-size:.88rem; font-weight:500; color:var(--ink-soft); cursor:pointer; margin:0;
+  }
+  .dd-panel label:hover{background:var(--paper);}
+  .modal .body{padding:18px 20px; display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .modal .body .full{grid-column:1/-1;}
+  .field label{display:block; font-size:.78rem; font-weight:600; color:var(--ink-soft); margin-bottom:5px;}
+  .field input,.field select,.field textarea{
+    width:100%; padding:8px 11px; border:1px solid var(--line); border-radius:8px; outline:none; background:#fff;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);}
+  .checks{display:flex; gap:14px; flex-wrap:wrap; padding-top:4px;}
+  .cor-note{
+    display:flex; gap:8px; align-items:flex-start;
+    background:var(--amber-bg); color:var(--amber);
+    border:1px solid #f0d9b5; border-radius:8px;
+    padding:9px 12px; font-size:.8rem; line-height:1.45;
+  }
+  .cor-note b{font-weight:700;}
+  .checks label{display:flex; align-items:center; gap:6px; font-size:.86rem; font-weight:500; color:var(--ink-soft); margin:0;}
+  .modal footer{display:flex; justify-content:space-between; gap:10px; padding:14px 20px; border-top:1px solid var(--line);}
+  .modal footer .right{display:flex; gap:10px; margin-left:auto;}
+  .danger-link{background:none; border:none; color:var(--red); font-weight:600;}
+  .xclose{border:none; background:transparent; font-size:1.2rem; color:var(--muted); width:32px; height:32px; border-radius:50%;}
+  .xclose:hover{background:var(--paper);}
+  .hint{font-size:.75rem; color:var(--muted); margin-top:4px;}
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(80px);
+    background:var(--ink); color:#fff; padding:10px 18px; border-radius:999px;
+    font-size:.85rem; z-index:80; opacity:0; transition:all .25s ease; pointer-events:none;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .storage-note{margin-top:16px; font-size:.78rem; color:var(--muted);}
+
+  @media (max-width:860px){
+    body #appScreen .sidebar{width:var(--sidebar-w-min);}
+    body #appScreen .sidebar .label, body #appScreen .sidebar .chev{display:none;}
+    body #appScreen .main{margin-left:var(--sidebar-w-min); padding:16px 12px 60px;}
+    .modal .body{grid-template-columns:1fr;}
+    .cluster-grid{grid-template-columns:1fr;}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     LOGIN SCREEN
+============================================================ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="logo">MSMA</div>
+    <h1>MSMA Tax Compliance System</h1>
+    <div class="tag">Select your cluster to continue</div>
+    <div class="login-err" id="loginErr"></div>
+    <div class="cluster-grid" id="clusterGrid">
+      <button class="cluster-opt" data-cluster="RPM">RPM<small>Cluster</small></button>
+      <button class="cluster-opt" data-cluster="VCM">VCM<small>Cluster</small></button>
+      <button class="cluster-opt" data-cluster="ADS">ADS<small>Cluster</small></button>
+    </div>
+    <div class="login-field">
+      <label for="loginPw">Cluster password</label>
+      <div class="pw-wrap">
+        <input type="password" id="loginPw" placeholder="Enter cluster password" autocomplete="current-password">
+        <button class="eye" id="pwEye" type="button" aria-label="Show password">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <button class="login-btn" id="btnLogin">Sign in</button>
+    <div class="login-foot">Mora Sanchez Meñoza and Associates · Internal use only · msma.work</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP
+============================================================ -->
+<div id="appScreen">
+  <div class="topbar">
+    <button class="hamburger" id="btnNav" aria-label="Toggle navigation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="brand">
+      <span class="word">MSMA</span>
+      <span class="app">Tax Compliance System</span>
+    </div>
+    <span class="cluster-chip" id="clusterChip"></span>
+    <div class="spacer"></div>
+    <div class="pst-clock" id="pstClock"></div>
+    <button class="logout-btn" id="btnLogout">Log out</button>
+  </div>
+
+  <nav class="sidebar" id="sidebar">
+    <button class="nav-item" data-view="dashboard">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      <span class="label">Main Tracker</span>
+    </button>
+    <button class="nav-item" data-view="masterlist">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span class="label">Client Masterlist</span>
+    </button>
+
+    <button class="nav-item" id="taxParent">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span class="label">Tax Compliance</span>
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="submenu" id="taxSubmenu">
+      <button class="nav-item" data-view="WTC"><span class="label">WTC · Compensation</span></button>
+      <button class="nav-item" data-view="EWT"><span class="label">EWT · Expanded</span></button>
+      <button class="nav-item" data-view="VAT"><span class="label">VAT</span></button>
+      <button class="nav-item" data-view="IT"><span class="label">IT · Income Tax</span></button>
+    </div>
+
+    <div class="nav-bottom">
+      <button class="nav-item" id="navExport">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span class="label">Export current view</span>
+      </button>
+    </div>
+  </nav>
+
+  <main class="main" id="mainContent"></main>
+</div>
+
+<!-- ============ CLIENT MODAL ============ -->
+<div class="overlay" id="clientOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header>
+      <h2 id="clientModalTitle">Add client</h2>
+      <button class="xclose" data-close="clientOverlay">✕</button>
+    </header>
+    <div class="body">
+      <div class="cor-note full">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 15px; margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span>All information must be based on the client's <b>latest Certificate of Registration (BIR Form 2303)</b>.</span>
+      </div>
+      <div class="field full">
+        <label>Registered name</label>
+        <input id="fName" placeholder="e.g. ABC Trading Corp.">
+      </div>
+      <div class="field">
+        <label>TIN</label>
+        <input id="fTin" placeholder="000-000-000-000">
+      </div>
+      <div class="field">
+        <label>RDO code</label>
+        <input id="fRdo" placeholder="e.g. 081">
+      </div>
+      <div class="field">
+        <label>Filing channel</label>
+        <select id="fChan">
+          <option value="eBIRForms">eBIRForms</option>
+          <option value="EFPS">EFPS</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>EFPS group</label>
+        <select id="fGroup">
+          <option value="">N/A</option>
+          <option value="A">Group A (file by 15th)</option>
+          <option value="B">Group B (file by 14th)</option>
+          <option value="C">Group C (file by 13th)</option>
+          <option value="D">Group D (file by 12th)</option>
+          <option value="E">Group E (file by 11th)</option>
+        </select>
+        <div class="hint">Staggered filing applies to EFPS monthly withholding returns. Payment due the 15th.</div>
+      </div>
+      <div class="field">
+        <label>Applicable tax types</label>
+        <div class="dd" id="taxDd">
+          <button type="button" class="dd-btn placeholder" id="taxDdBtn">Select tax types</button>
+          <div class="dd-panel">
+            <label><input type="checkbox" id="txWTC"> WTC</label>
+            <label><input type="checkbox" id="txEWT"> EWT</label>
+            <label><input type="checkbox" id="txVAT"> VAT</label>
+            <label><input type="checkbox" id="txIT"> IT</label>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Registered business address</label>
+        <input id="fAddr" placeholder="As shown on the 2303">
+      </div>
+      <div class="field">
+        <label>Associate in charge</label>
+        <input id="fPrep" placeholder="Staff name">
+      </div>
+      <div class="field">
+        <label>Reviewer/Senior associate in charge</label>
+        <input id="fRev" placeholder="Senior / manager">
+      </div>
+      <div class="field full">
+        <label>Notes</label>
+        <textarea id="fNotes" rows="2" placeholder="Payroll cut-off quirks, contact person, etc."></textarea>
+      </div>
+    </div>
+    <footer>
+      <button class="danger-link" id="btnDeleteClient" style="display:none;">Delete client</button>
+      <div class="right">
+        <button class="btn ghost" data-close="clientOverlay">Cancel</button>
+        <button class="btn" id="btnSaveClient">Save client</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ============ RECORD MODAL ============ -->
+<div class="overlay" id="recOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header>
+      <h2 id="recModalTitle">Filing detail</h2>
+      <button class="xclose" data-close="recOverlay">✕</button>
+    </header>
+    <div class="body">
+      <div class="field">
+        <label>Tax due (₱)</label>
+        <input id="rTax" type="number" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>Confirmation / FRN no.</label>
+        <input id="rRef" placeholder="Filing reference no.">
+      </div>
+      <div class="field full">
+        <label>Notes for this period</label>
+        <textarea id="rNotes" rows="3" placeholder="Variances, client delays, penalty exposure…"></textarea>
+      </div>
+      <div class="field full">
+        <label>Step history</label>
+        <div id="rHistory" style="font-size:.82rem; color:var(--ink-soft); line-height:1.7;"></div>
+      </div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="recOverlay">Close</button>
+        <button class="btn" id="btnSaveRec">Save</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   PST-pinned date helpers
+============================================================ */
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function nowPST(){
+  const fmt = new Intl.DateTimeFormat("en-PH", {
+    timeZone:"Asia/Manila", year:"numeric", month:"2-digit", day:"2-digit",
+    hour:"2-digit", minute:"2-digit", hour12:false
+  });
+  const p = {};
+  fmt.formatToParts(new Date()).forEach(x => p[x.type] = x.value);
+  return { y:+p.year, m:+p.month, d:+p.day, hh:p.hour, mm:p.minute };
+}
+function ymdInt(y,m,d){ return y*10000+m*100+d; }
+function todayInt(){ const t=nowPST(); return ymdInt(t.y,t.m,t.d); }
+function dateStampPST(){ const t=nowPST(); return `${t.y}-${String(t.m).padStart(2,"0")}-${String(t.d).padStart(2,"0")}`; }
+function daysBetween(fromInt, toYmd){
+  const f = new Date(Date.UTC(Math.floor(fromInt/10000), Math.floor(fromInt/100)%100-1, fromInt%100));
+  const t = new Date(Date.UTC(toYmd.y, toYmd.m-1, toYmd.d));
+  return Math.round((t-f)/86400000);
+}
+function lastDayOf(y,m){ return new Date(Date.UTC(y,m,0)).getUTCDate(); }
+function addDays(y,m,d,n){
+  const dt = new Date(Date.UTC(y,m-1,d)); dt.setUTCDate(dt.getUTCDate()+n);
+  return { y:dt.getUTCFullYear(), m:dt.getUTCMonth()+1, d:dt.getUTCDate() };
+}
+function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+function fmtYmd(o){ return `${MONTHS[o.m-1].slice(0,3)} ${o.d}, ${o.y}`; }
+
+/* ============================================================
+   Auth — cluster gate (hash-obfuscated; see deployment note)
+============================================================ */
+const cyrb53 = (str, seed = 0) => {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0, ch; i < str.length; i++) {
+    ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+};
+const CLUSTER_HASHES = { RPM:8648645207156326, ADS:8324280130240436, VCM:7499670937568036 };
+
+/* ============================================================
+   Storage (localStorage w/ in-memory fallback for sandboxes)
+============================================================ */
+const memStore = {};
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return memStore[k] ?? null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){ memStore[k]=v; } },
+  del(k){ try { localStorage.removeItem(k); } catch(e){ delete memStore[k]; } }
+};
+const memSession = {};
+const session = {
+  get(k){ try { return sessionStorage.getItem(k); } catch(e){ return memSession[k] ?? null; } },
+  set(k,v){ try { sessionStorage.setItem(k,v); } catch(e){ memSession[k]=v; } },
+  del(k){ try { sessionStorage.removeItem(k); } catch(e){ delete memSession[k]; } }
+};
+
+let cluster = null;
+let db = null;
+function dbKey(){ return `msma_taxcomp_v1_${cluster}`; }
+function loadDb(){
+  try { db = JSON.parse(store.get(dbKey())) || null; } catch(e){ db = null; }
+  if(!db) db = { clients:[], records:{} };
+  if(!db.clients) db.clients = [];
+  if(!db.records) db.records = {};
+  // migrate any clients saved under the old "WTE" tag to "EWT"
+  db.clients.forEach(c=>{
+    if(c.taxTypes && "WTE" in c.taxTypes){
+      c.taxTypes.EWT = c.taxTypes.EWT || c.taxTypes.WTE;
+      delete c.taxTypes.WTE;
+    }
+  });
+}
+function save(){ store.set(dbKey(), JSON.stringify(db)); }
+
+/* ============================================================
+   Return definitions & deadline logic
+============================================================ */
+const STEPS = [
+  {key:"requested", label:"Data Requested",  short:"RQ"},
+  {key:"received",  label:"Data Received",   short:"RC"},
+  {key:"drafted",   label:"Return Drafted",  short:"DR"},
+  {key:"reviewed",  label:"Reviewed",        short:"RV"},
+  {key:"approved",  label:"Client Approved", short:"AP"},
+  {key:"filed",     label:"Filed",           short:"FI"},
+  {key:"paid",      label:"Paid",            short:"PY"},
+  {key:"archived",  label:"Archived",        short:"AR"}
+];
+const EFPS_DAYS = {A:15,B:14,C:13,D:12,E:11};
+
+// freq: M (monthly), Q (quarterly), A (annual)
+const RETURNS = {
+  "1601C":  { tax:"WTC", form:"1601-C",  name:"Withholding Tax on Compensation", freq:"M" },
+  "0619E":  { tax:"EWT", form:"0619-E",  name:"Expanded WT — Monthly Remittance", freq:"M" },
+  "1601EQ": { tax:"EWT", form:"1601-EQ", name:"Expanded WT — Quarterly Return",   freq:"Q" },
+  "2550Q":  { tax:"VAT", form:"2550Q",   name:"Quarterly Value-Added Tax Return", freq:"Q" },
+  "1702Q":  { tax:"IT",  form:"1702Q/1701Q", name:"Quarterly Income Tax Return",  freq:"Q" },
+  "1702":   { tax:"IT",  form:"1702/1701",   name:"Annual Income Tax Return",     freq:"A" }
+};
+const TAX_PAGES = {
+  WTC: { title:"Withholding Tax — Compensation", returns:["1601C"] },
+  EWT: { title:"Withholding Tax — Expanded",     returns:["0619E","1601EQ"] },
+  VAT: { title:"Value-Added Tax",                returns:["2550Q"] },
+  IT:  { title:"Income Tax",                     returns:["1702Q","1702"] }
+};
+
+// period objects: monthly {y,m} · quarterly {y,q} · annual {y}
+function periodKey(ret, p){
+  const f = RETURNS[ret].freq;
+  if(f==="M") return `${p.y}-${String(p.m).padStart(2,"0")}`;
+  if(f==="Q") return `${p.y}-Q${p.q}`;
+  return `${p.y}`;
+}
+function periodLabel(ret, p){
+  const f = RETURNS[ret].freq;
+  if(f==="M") return `${MONTHS[p.m-1]} ${p.y}`;
+  if(f==="Q") return `Q${p.q} ${p.y}`;
+  return `TY ${p.y}`;
+}
+function shiftPeriod(ret, p, dir){
+  const f = RETURNS[ret].freq;
+  if(f==="M"){
+    let m=p.m+dir, y=p.y;
+    if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+    return {y,m};
+  }
+  if(f==="Q"){
+    let q=p.q+dir, y=p.y;
+    if(q<1){q=4;y--;} if(q>4){q=1;y++;}
+    return {y,q};
+  }
+  return {y:p.y+dir};
+}
+// default period = latest CLOSED period as of PST today
+function defaultPeriod(ret){
+  const t = nowPST();
+  const f = RETURNS[ret].freq;
+  if(f==="M") return t.m===1 ? {y:t.y-1,m:12} : {y:t.y,m:t.m-1};
+  if(f==="Q"){
+    const curQ = Math.floor((t.m-1)/3)+1;
+    return curQ===1 ? {y:t.y-1,q:4} : {y:t.y,q:curQ-1};
+  }
+  return {y:t.y-1};
+}
+// deadline: returns {file:{y,m,d}, pay:{y,m,d}}
+function deadlineFor(ret, client, p){
+  const R = RETURNS[ret];
+  if(R.freq==="M"){
+    const f = p.m===12 ? {y:p.y+1,m:1} : {y:p.y,m:p.m+1};
+    if(p.m===12) return { file:{...f,d:15}, pay:{...f,d:15} };  // Dec comp: Jan 15
+    if(client.channel==="EFPS"){
+      const d = EFPS_DAYS[client.efpsGroup] || 15;
+      return { file:{...f,d}, pay:{...f,d:15} };
+    }
+    return { file:{...f,d:10}, pay:{...f,d:10} };
+  }
+  if(R.freq==="Q"){
+    const endM = p.q*3, endD = lastDayOf(p.y, endM);
+    if(ret==="1601EQ"){
+      const f = endM===12 ? {y:p.y+1,m:1} : {y:p.y,m:endM+1};
+      const d = lastDayOf(f.y, f.m);
+      return { file:{...f,d}, pay:{...f,d} };  // last day of month following quarter
+    }
+    if(ret==="2550Q"){
+      const f = endM===12 ? {y:p.y+1,m:1} : {y:p.y,m:endM+1};
+      return { file:{...f,d:25}, pay:{...f,d:25} };  // 25th following quarter close
+    }
+    // 1702Q: 60 days after quarter close (corp); good proxy for 1701Q too
+    const dl = addDays(p.y, endM, endD, 60);
+    return { file:dl, pay:dl };
+  }
+  // annual: April 15 following taxable year
+  return { file:{y:p.y+1,m:4,d:15}, pay:{y:p.y+1,m:4,d:15} };
+}
+
+function getRecord(ret, p, clientId){
+  const rk = `${ret}|${periodKey(ret,p)}`;
+  if(!db.records[rk]) db.records[rk] = {};
+  if(!db.records[rk][clientId]) db.records[rk][clientId] = { stage:0, dates:{}, taxDue:"", ref:"", notes:"" };
+  return db.records[rk][clientId];
+}
+
+function flagFor(ret, client, p, rec){
+  if(rec.stage >= 8) return {cls:"green", text:"Complete", rank:4};
+  if(rec.stage >= 6) return {cls:"green", text:"Filed", rank:3};
+  const dl = deadlineFor(ret, client, p);
+  const days = daysBetween(todayInt(), dl.file);   // >0 = days remaining
+  if(days < 0)  return {cls:"red", text:"OVERDUE", rank:0};
+  if(days <= 2) return {cls:"red", text:"At risk", rank:0};
+  if(rec.stage < 2 && days <= 6) return {cls:"amber", text:"Chase data", rank:1};
+  if(rec.stage === 0 && days <= 8) return {cls:"amber", text:"Send request", rank:1};
+  return {cls:"grey", text:"On track", rank:2};
+}
+
+function clientsFor(taxType){
+  return db.clients
+    .filter(c => c.taxTypes && c.taxTypes[taxType])
+    .sort((a,b)=>a.name.localeCompare(b.name));
+}
+
+/* ============================================================
+   UI state
+============================================================ */
+const $ = id => document.getElementById(id);
+let view = "dashboard";          // dashboard | masterlist | WTC | EWT | VAT | IT
+let activeReturn = {};           // per tax page: which return sub-tab
+let periods = {};                // per return key: current period
+let recCtx = null;               // {ret, period, clientId}
+let editingClientId = null;
+let searchQ = "", filterFlag = "", filterChan = "";
+
+Object.keys(RETURNS).forEach(r => periods[r] = defaultPeriod(r));
+Object.keys(TAX_PAGES).forEach(t => activeReturn[t] = TAX_PAGES[t].returns[0]);
+
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function fmtMoney(v){
+  if(v === "" || v === null || v === undefined || isNaN(+v)) return "—";
+  return "₱" + (+v).toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+/* ============================================================
+   LOGIN flow
+============================================================ */
+let selCluster = null;
+document.querySelectorAll(".cluster-opt").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll(".cluster-opt").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel");
+    selCluster = b.dataset.cluster;
+    $("loginErr").classList.remove("show");
+    $("loginPw").focus();
+  };
+});
+$("pwEye").onclick = ()=>{
+  const i = $("loginPw");
+  i.type = i.type === "password" ? "text" : "password";
+};
+function tryLogin(){
+  const err = $("loginErr");
+  err.classList.remove("show");
+  if(!selCluster){
+    err.textContent = "Please select your cluster first.";
+    void err.offsetWidth; err.classList.add("show"); return;
+  }
+  const pw = $("loginPw").value;
+  if(cyrb53(pw) !== CLUSTER_HASHES[selCluster]){
+    err.textContent = "Incorrect password for the " + selCluster + " Cluster.";
+    void err.offsetWidth; err.classList.add("show");
+    $("loginPw").select(); return;
+  }
+  session.set("msma_cluster", selCluster);
+  enterApp(selCluster);
+}
+$("btnLogin").onclick = tryLogin;
+$("loginPw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); });
+
+function enterApp(cl){
+  cluster = cl;
+  loadDb();
+  $("clusterChip").textContent = cluster + " CLUSTER";
+  $("loginScreen").style.display = "none";
+  $("appScreen").style.display = "block";
+  $("loginPw").value = "";
+  view = "dashboard";
+  render();
+}
+$("btnLogout").onclick = ()=>{
+  session.del("msma_cluster");
+  cluster = null; db = null;
+  $("appScreen").style.display = "none";
+  $("loginScreen").style.display = "flex";
+  document.querySelectorAll(".cluster-opt").forEach(x=>x.classList.remove("sel"));
+  selCluster = null;
+};
+
+/* ============================================================
+   SIDEBAR behaviour
+============================================================ */
+$("btnNav").onclick = ()=> document.body.classList.toggle("nav-min");
+$("taxParent").onclick = ()=>{
+  $("taxParent").classList.toggle("open");
+  $("taxSubmenu").classList.toggle("open");
+};
+document.querySelectorAll(".nav-item[data-view]").forEach(b=>{
+  b.onclick = ()=>{
+    view = b.dataset.view;
+    searchQ = ""; filterFlag = ""; filterChan = "";
+    if(TAX_PAGES[view] && !$("taxSubmenu").classList.contains("open")){
+      $("taxParent").classList.add("open");
+      $("taxSubmenu").classList.add("open");
+    }
+    render();
+  };
+});
+window.gotoView = function(v, ret){
+  view = v;
+  if(ret) activeReturn[RETURNS[ret].tax] = ret;
+  if(TAX_PAGES[v]){
+    $("taxParent").classList.add("open");
+    $("taxSubmenu").classList.add("open");
+  }
+  render();
+};
+
+/* ============================================================
+   RENDER — router
+============================================================ */
+function render(){
+  document.querySelectorAll(".nav-item[data-view]").forEach(b=>{
+    b.classList.toggle("active", b.dataset.view === view);
+  });
+  $("taxParent").classList.toggle("active", !!TAX_PAGES[view]);
+  const el = $("mainContent");
+  if(view==="dashboard") el.innerHTML = renderDashboard();
+  else if(view==="masterlist") el.innerHTML = renderMasterlist();
+  else el.innerHTML = renderTaxPage(view);
+  wirePageEvents();
+}
+
+/* -------------------- Dashboard -------------------- */
+function summarize(ret){
+  const R = RETURNS[ret];
+  const p = defaultPeriod(ret);
+  const list = clientsFor(R.tax);
+  const s = { total:list.length, filed:0, prog:0, amber:0, red:0, notStarted:0 };
+  list.forEach(c=>{
+    const rec = getRecord(ret, p, c.id);
+    const f = flagFor(ret, c, p, rec);
+    if(rec.stage>=6) s.filed++;
+    else { s.prog++; if(rec.stage===0) s.notStarted++; }
+    if(f.cls==="amber") s.amber++;
+    if(f.cls==="red") s.red++;
+  });
+  return { p, s };
+}
+function renderDashboard(){
+  const t = nowPST();
+  let cards = "", attention = "";
+  let attRows = [];
+
+  Object.keys(RETURNS).forEach(ret=>{
+    const R = RETURNS[ret];
+    const { p, s } = summarize(ret);
+    const pct = s.total ? Math.round(100*s.filed/s.total) : 0;
+    const gDL = deadlineFor(ret, {channel:"eBIRForms"}, p).file;
+    cards += `
+      <div class="ret-card" onclick="gotoView('${R.tax}','${ret}')">
+        <div class="rc-head">
+          <span class="rc-form">${R.form}</span>
+          <span class="rc-tax">${R.tax}</span>
+        </div>
+        <div class="rc-period">${escapeHtml(R.name)} · ${periodLabel(ret,p)} · due ${fmtYmd(gDL)}${ret==="1601C"||ret==="0619E"?" (EFPS staggered)":""}</div>
+        <div class="rc-bar">
+          <i style="width:${pct}%; background:var(--green);"></i>
+          <i style="width:${s.total?Math.round(100*s.red/s.total):0}%; background:var(--red);"></i>
+          <i style="width:${s.total?Math.round(100*s.amber/s.total):0}%; background:var(--amber);"></i>
+        </div>
+        <div class="rc-nums">
+          <span><span class="dot" style="background:var(--green)"></span><b>${s.filed}</b>/${s.total} filed</span>
+          <span><span class="dot" style="background:var(--ink)"></span><b>${s.prog}</b> in progress</span>
+          <span><span class="dot" style="background:var(--amber)"></span><b>${s.amber}</b> follow-up</span>
+          <span><span class="dot" style="background:var(--red)"></span><b>${s.red}</b> at risk</span>
+        </div>
+      </div>`;
+
+    // attention list rows
+    clientsFor(R.tax).forEach(c=>{
+      const rec = getRecord(ret, p, c.id);
+      const f = flagFor(ret, c, p, rec);
+      if(f.cls==="red" || f.cls==="amber"){
+        attRows.push({ f, c, ret, p, dl: deadlineFor(ret, c, p).file,
+          stageWord: rec.stage===0 ? "Not started" : STEPS[rec.stage-1].label });
+      }
+    });
+  });
+
+  attRows.sort((a,b)=> a.f.rank - b.f.rank || ymdInt(a.dl.y,a.dl.m,a.dl.d) - ymdInt(b.dl.y,b.dl.m,b.dl.d));
+  attention = attRows.length ? attRows.map(r=>`
+    <tr>
+      <td><div class="cname" onclick="gotoView('${RETURNS[r.ret].tax}','${r.ret}')">${escapeHtml(r.c.name)}</div>
+          <div class="cmeta">${escapeHtml(r.c.preparer||"unassigned")}</div></td>
+      <td><b>${RETURNS[r.ret].form}</b><div class="cmeta">${periodLabel(r.ret,r.p)}</div></td>
+      <td class="due">${fmtYmd(r.dl)}</td>
+      <td>${escapeHtml(r.stageWord)}</td>
+      <td><span class="flagchip ${r.f.cls}">${r.f.text}</span></td>
+    </tr>`).join("")
+    : `<tr><td colspan="5"><div class="empty" style="padding:26px;">Nothing needs attention right now. <b>All returns are on track.</b></div></td></tr>`;
+
+  return `
+    <div class="page-head">
+      <h1>Main Tracker</h1>
+      <div class="sub">Per-return compliance summary for the ${cluster} Cluster · current open cycles as of ${MONTHS[t.m-1]} ${t.d}, ${t.y} (PST)</div>
+    </div>
+    <div class="ret-grid">${cards}</div>
+    <div class="card">
+      <div class="card-title">Needs attention <span class="pill">${attRows.length}</span></div>
+      <table>
+        <thead><tr><th>Client</th><th>Return</th><th>Deadline</th><th>Last step done</th><th>Flag</th></tr></thead>
+        <tbody>${attention}</tbody>
+      </table>
+    </div>
+    <p class="storage-note">Cluster data is stored in this browser (localStorage) under the ${cluster} workspace. All dates are pinned to Philippine Standard Time.</p>`;
+}
+
+/* -------------------- Masterlist -------------------- */
+function renderMasterlist(){
+  const q = searchQ.toLowerCase();
+  const rows = [...db.clients].sort((a,b)=>a.name.localeCompare(b.name)).filter(c=>{
+    if(q && !(c.name.toLowerCase().includes(q) || (c.tin||"").toLowerCase().includes(q) ||
+              (c.preparer||"").toLowerCase().includes(q) || (c.reviewer||"").toLowerCase().includes(q))) return false;
+    if(filterChan && c.channel !== filterChan) return false;
+    return true;
+  }).map(c=>`
+    <tr>
+      <td><div class="cname" onclick="openClient('${c.id}')">${escapeHtml(c.name)}</div>
+          <div class="cmeta">TIN ${escapeHtml(c.tin||"—")} · RDO ${escapeHtml(c.rdo||"—")}${c.address?"<br>"+escapeHtml(c.address):""}</div></td>
+      <td><span class="chan ${c.channel==="EFPS"?"efps":"ebir"}">${c.channel}${c.channel==="EFPS"&&c.efpsGroup?" · "+c.efpsGroup:""}</span></td>
+      <td>${["WTC","EWT","VAT","IT"].filter(t=>c.taxTypes&&c.taxTypes[t]).map(t=>`<span class="taxtag">${t}</span>`).join("")||"—"}</td>
+      <td>${escapeHtml(c.preparer||"—")}<div class="cmeta">${c.reviewer?("Rev: "+escapeHtml(c.reviewer)):""}</div></td>
+      <td>${escapeHtml(c.notes||"")}</td>
+    </tr>`).join("");
+
+  return `
+    <div class="page-head">
+      <h1>Client Masterlist</h1>
+      <div class="sub">${db.clients.length} client${db.clients.length===1?"":"s"} in the ${cluster} Cluster · click a name to edit</div>
+    </div>
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Search client, TIN, or staff…" value="${escapeHtml(searchQ)}">
+      <select id="filterChan">
+        <option value="">All channels</option>
+        <option value="eBIRForms" ${filterChan==="eBIRForms"?"selected":""}>eBIRForms</option>
+        <option value="EFPS" ${filterChan==="EFPS"?"selected":""}>EFPS</option>
+      </select>
+      <button class="btn" id="btnAddClient">+ Add client</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th style="min-width:200px;">Client</th><th>Channel</th><th>Tax types</th><th>Assigned</th><th>Notes</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${db.clients.length ? "" : `<div class="empty"><b>No clients yet.</b><br>Add your first client to start tracking compliance for this cluster.</div>`}
+    </div>`;
+}
+
+/* -------------------- Tax pages -------------------- */
+function renderTaxPage(taxType){
+  const page = TAX_PAGES[taxType];
+  const ret = activeReturn[taxType];
+  const R = RETURNS[ret];
+  const p = periods[ret];
+  const list = clientsFor(taxType);
+  const q = searchQ.toLowerCase();
+
+  const tabs = page.returns.length > 1 ? `
+    <div class="subtabs">
+      ${page.returns.map(r=>`<button class="subtab ${r===ret?"active":""}" data-ret="${r}">${RETURNS[r].form} · ${RETURNS[r].freq==="M"?"Monthly":RETURNS[r].freq==="Q"?"Quarterly":"Annual"}</button>`).join("")}
+    </div>` : "";
+
+  let stats = {total:0, filed:0, prog:0, amber:0, red:0};
+  let rows = "";
+  list.forEach(c=>{
+    const rec = getRecord(ret, p, c.id);
+    const flag = flagFor(ret, c, p, rec);
+    if(q && !(c.name.toLowerCase().includes(q) || (c.tin||"").toLowerCase().includes(q) ||
+              (c.preparer||"").toLowerCase().includes(q) || (c.reviewer||"").toLowerCase().includes(q))) return;
+    if(filterChan && c.channel !== filterChan) return;
+    if(filterFlag){
+      if(filterFlag==="red" && flag.cls!=="red") return;
+      if(filterFlag==="amber" && flag.cls!=="amber") return;
+      if(filterFlag==="green" && flag.cls!=="green") return;
+      if(filterFlag==="pending" && flag.cls==="green") return;
+    }
+    stats.total++;
+    if(rec.stage>=6) stats.filed++; else stats.prog++;
+    if(flag.cls==="amber") stats.amber++;
+    if(flag.cls==="red") stats.red++;
+
+    const dl = deadlineFor(ret, c, p);
+    const pipe = STEPS.map((s,i)=>{
+      const done = i < rec.stage, next = i === rec.stage;
+      const tip = s.label + (rec.dates[s.key] ? ` · ${rec.dates[s.key]}` : "");
+      return `<div class="step ${done?"done":next?"next":""}" data-tip="${escapeHtml(tip)}">${s.short}</div>`;
+    }).join("");
+    const statusWord = rec.stage===0 ? "Not started"
+      : rec.stage>=STEPS.length ? "Archived ✓"
+      : `${STEPS[rec.stage-1].label} · next: ${STEPS[rec.stage].label}`;
+
+    rows += `
+      <tr>
+        <td>
+          <div class="cname" onclick="openClient('${c.id}')">${escapeHtml(c.name)}</div>
+          <div class="cmeta">${escapeHtml(c.tin||"—")} · ${escapeHtml(c.preparer||"unassigned")}${c.reviewer?" / "+escapeHtml(c.reviewer):""}</div>
+        </td>
+        <td><span class="chan ${c.channel==="EFPS"?"efps":"ebir"}">${c.channel}${c.channel==="EFPS"&&c.efpsGroup?" · "+c.efpsGroup:""}</span></td>
+        <td class="due">File: <b>${fmtYmd(dl.file)}</b><br><span class="cmeta">Pay: ${fmtYmd(dl.pay)}</span></td>
+        <td>
+          <div style="display:flex; align-items:center;">
+            <div class="pipe">${pipe}</div>
+            <div class="pipe-actions">
+              <button title="Step back" onclick="stepRec('${ret}','${c.id}',-1)">−</button>
+              <button title="Advance step" onclick="stepRec('${ret}','${c.id}',1)">＋</button>
+            </div>
+          </div>
+          <div class="status-word">${statusWord}</div>
+        </td>
+        <td style="cursor:pointer; font-variant-numeric:tabular-nums;" onclick="openRec('${ret}','${c.id}')" title="Open filing detail">
+          ${fmtMoney(rec.taxDue)}${rec.ref?`<div class="cmeta">FRN ${escapeHtml(rec.ref)}</div>`:""}
+        </td>
+        <td><span class="flagchip ${flag.cls}">${flag.text}</span></td>
+      </tr>`;
+  });
+
+  return `
+    <div class="page-head">
+      <h1>${page.title}</h1>
+      <div class="period-nav">
+        <button id="prevPeriod" aria-label="Previous period">‹</button>
+        <div class="period-label">${periodLabel(ret,p)}</div>
+        <button id="nextPeriod" aria-label="Next period">›</button>
+      </div>
+      <div class="sub">${R.form} — ${escapeHtml(R.name)} · ${list.length} applicable client${list.length===1?"":"s"} in the ${cluster} Cluster</div>
+    </div>
+    ${tabs}
+    <div class="stat-row">
+      <div class="stat"><div class="n">${stats.total}</div><div class="l">Clients this period</div></div>
+      <div class="stat flag-green"><div class="n">${stats.filed}</div><div class="l">Filed</div></div>
+      <div class="stat"><div class="n">${stats.prog}</div><div class="l">In pipeline</div></div>
+      <div class="stat flag-amber"><div class="n">${stats.amber}</div><div class="l">Needs follow-up</div></div>
+      <div class="stat flag-red"><div class="n">${stats.red}</div><div class="l">At risk / overdue</div></div>
+    </div>
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Search client, TIN, or staff…" value="${escapeHtml(searchQ)}">
+      <select id="filterFlag">
+        <option value="">All statuses</option>
+        <option value="red" ${filterFlag==="red"?"selected":""}>Overdue / at risk</option>
+        <option value="amber" ${filterFlag==="amber"?"selected":""}>Needs follow-up</option>
+        <option value="green" ${filterFlag==="green"?"selected":""}>Filed / done</option>
+        <option value="pending" ${filterFlag==="pending"?"selected":""}>In progress</option>
+      </select>
+      <select id="filterChan">
+        <option value="">All channels</option>
+        <option value="eBIRForms" ${filterChan==="eBIRForms"?"selected":""}>eBIRForms</option>
+        <option value="EFPS" ${filterChan==="EFPS"?"selected":""}>EFPS</option>
+      </select>
+      <button class="btn" id="btnAddClient">+ Add client</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th style="min-width:190px;">Client</th><th>Channel</th><th>Deadline</th>
+          <th style="min-width:290px;">Pipeline</th><th>Tax due</th><th>Flag</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${list.length ? "" : `<div class="empty"><b>No clients tagged for ${taxType}.</b><br>Tag clients with the ${taxType} tax type in the Client Masterlist to track ${R.form} here.</div>`}
+    </div>`;
+}
+
+/* ============================================================
+   Page event wiring (after each render)
+============================================================ */
+function wirePageEvents(){
+  const s = $("search");
+  if(s) s.addEventListener("input", e=>{ searchQ = e.target.value; rerenderKeepFocus(); });
+  const ff = $("filterFlag");
+  if(ff) ff.addEventListener("change", e=>{ filterFlag = e.target.value; render(); });
+  const fc = $("filterChan");
+  if(fc) fc.addEventListener("change", e=>{ filterChan = e.target.value; render(); });
+  const add = $("btnAddClient");
+  if(add) add.onclick = ()=> openClient(null);
+
+  if(TAX_PAGES[view]){
+    const ret = activeReturn[view];
+    const pv = $("prevPeriod"), nx = $("nextPeriod");
+    if(pv) pv.onclick = ()=>{ periods[ret] = shiftPeriod(ret, periods[ret], -1); render(); };
+    if(nx) nx.onclick = ()=>{ periods[ret] = shiftPeriod(ret, periods[ret], 1); render(); };
+    document.querySelectorAll(".subtab").forEach(b=>{
+      b.onclick = ()=>{ activeReturn[view] = b.dataset.ret; render(); };
+    });
+  }
+}
+function rerenderKeepFocus(){
+  const pos = $("search") ? $("search").selectionStart : 0;
+  render();
+  const s = $("search");
+  if(s){ s.focus(); s.setSelectionRange(pos,pos); }
+}
+
+/* ============================================================
+   Pipeline actions
+============================================================ */
+window.stepRec = function(ret, clientId, dir){
+  const rec = getRecord(ret, periods[ret], clientId);
+  if(dir === 1 && rec.stage < STEPS.length){
+    const step = STEPS[rec.stage];
+    rec.dates[step.key] = dateStampPST();
+    rec.stage++;
+    toast(`${RETURNS[ret].form}: ${step.label} · ${rec.dates[step.key]}`);
+  } else if(dir === -1 && rec.stage > 0){
+    rec.stage--;
+    const step = STEPS[rec.stage];
+    delete rec.dates[step.key];
+    toast(`Rolled back to before "${step.label}"`);
+  }
+  save(); render();
+};
+
+/* ============================================================
+   Client modal
+============================================================ */
+window.openClient = function(id){
+  editingClientId = id || null;
+  const c = db.clients.find(x=>x.id===id) || {};
+  $("clientModalTitle").textContent = id ? "Edit client" : "Add client";
+  $("fName").value = c.name || "";
+  $("fTin").value = c.tin || "";
+  $("fRdo").value = c.rdo || "";
+  $("fAddr").value = c.address || "";
+  $("fChan").value = c.channel || "eBIRForms";
+  $("fGroup").value = c.efpsGroup || "";
+  $("fPrep").value = c.preparer || "";
+  $("fRev").value = c.reviewer || "";
+  $("fNotes").value = c.notes || "";
+  const tt = c.taxTypes || {};
+  $("txWTC").checked = !!tt.WTC;
+  $("txEWT").checked = !!tt.EWT;
+  $("txVAT").checked = !!tt.VAT;
+  $("txIT").checked = !!tt.IT;
+  // sensible default for new clients created from a tax page
+  if(!id && TAX_PAGES[view]) $("tx"+view).checked = true;
+  updateTaxDdLabel();
+  $("taxDd").classList.remove("open");
+  resetModalPosition("clientOverlay");
+  $("btnDeleteClient").style.display = id ? "inline" : "none";
+  $("clientOverlay").classList.add("open");
+  $("fName").focus();
+};
+
+/* ---- Applicable tax types dropdown checklist ---- */
+function updateTaxDdLabel(){
+  const sel = ["WTC","EWT","VAT","IT"].filter(t=>$("tx"+t).checked);
+  const btn = $("taxDdBtn");
+  if(sel.length){ btn.textContent = sel.join(", "); btn.classList.remove("placeholder"); }
+  else { btn.textContent = "Select tax types"; btn.classList.add("placeholder"); }
+}
+$("taxDdBtn").onclick = e=>{
+  e.stopPropagation();
+  $("taxDd").classList.toggle("open");
+};
+document.querySelectorAll("#taxDd .dd-panel input").forEach(cb=>{
+  cb.addEventListener("change", updateTaxDdLabel);
+});
+document.addEventListener("click", e=>{
+  const dd = $("taxDd");
+  if(dd && dd.classList.contains("open") && !dd.contains(e.target)) dd.classList.remove("open");
+});
+
+/* ---- Draggable modals (grab the header and move) ---- */
+function resetModalPosition(overlayId){
+  const m = document.querySelector(`#${overlayId} .modal`);
+  if(m){ m.style.transform = ""; m.dataset.dx = 0; m.dataset.dy = 0; }
+}
+document.querySelectorAll(".modal header").forEach(head=>{
+  head.addEventListener("mousedown", e=>{
+    if(e.target.closest(".xclose")) return;      // don't drag from the close button
+    const modal = head.closest(".modal");
+    const startX = e.clientX, startY = e.clientY;
+    const baseX = +modal.dataset.dx || 0, baseY = +modal.dataset.dy || 0;
+    const move = ev=>{
+      const dx = baseX + (ev.clientX - startX);
+      const dy = baseY + (ev.clientY - startY);
+      modal.dataset.dx = dx; modal.dataset.dy = dy;
+      modal.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+    const up = ()=>{
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+    e.preventDefault();
+  });
+});
+$("btnSaveClient").onclick = ()=>{
+  const name = $("fName").value.trim();
+  if(!name){ toast("Client name is required"); $("fName").focus(); return; }
+  const data = {
+    name, tin:$("fTin").value.trim(), rdo:$("fRdo").value.trim(),
+    address:$("fAddr").value.trim(),
+    channel:$("fChan").value,
+    efpsGroup:$("fChan").value==="EFPS" ? $("fGroup").value : "",
+    preparer:$("fPrep").value.trim(), reviewer:$("fRev").value.trim(), notes:$("fNotes").value.trim(),
+    taxTypes:{ WTC:$("txWTC").checked, EWT:$("txEWT").checked, VAT:$("txVAT").checked, IT:$("txIT").checked }
+  };
+  if(editingClientId){
+    Object.assign(db.clients.find(x=>x.id===editingClientId), data);
+    toast("Client updated");
+  } else {
+    data.id = "c" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    db.clients.push(data);
+    toast("Client added");
+  }
+  save(); closeOverlays(); render();
+};
+$("btnDeleteClient").onclick = ()=>{
+  if(!editingClientId) return;
+  const c = db.clients.find(x=>x.id===editingClientId);
+  if(!confirm(`Delete "${c.name}" and all of its tracked periods in the ${cluster} Cluster?`)) return;
+  db.clients = db.clients.filter(x=>x.id!==editingClientId);
+  Object.values(db.records).forEach(r=> delete r[editingClientId]);
+  save(); closeOverlays(); render(); toast("Client deleted");
+};
+
+/* ============================================================
+   Record modal
+============================================================ */
+window.openRec = function(ret, clientId){
+  recCtx = { ret, clientId };
+  const c = db.clients.find(x=>x.id===clientId);
+  const rec = getRecord(ret, periods[ret], clientId);
+  $("recModalTitle").textContent = `${c.name} · ${RETURNS[ret].form} · ${periodLabel(ret, periods[ret])}`;
+  $("rTax").value = rec.taxDue;
+  $("rRef").value = rec.ref || "";
+  $("rNotes").value = rec.notes || "";
+  $("rHistory").innerHTML = STEPS.map(s=>
+    rec.dates[s.key] ? `✓ ${s.label} — <b>${rec.dates[s.key]}</b>` : `<span style="color:var(--muted)">○ ${s.label}</span>`
+  ).join("<br>");
+  resetModalPosition("recOverlay");
+  $("recOverlay").classList.add("open");
+};
+$("btnSaveRec").onclick = ()=>{
+  const rec = getRecord(recCtx.ret, periods[recCtx.ret], recCtx.clientId);
+  rec.taxDue = $("rTax").value;
+  rec.ref = $("rRef").value.trim();
+  rec.notes = $("rNotes").value.trim();
+  save(); closeOverlays(); render(); toast("Filing detail saved");
+};
+
+/* ============================================================
+   Export current view
+============================================================ */
+$("navExport").onclick = ()=>{
+  let ret, filename, list;
+  if(view === "masterlist" || view === "dashboard"){
+    // export masterlist
+    const head = ["Client","TIN","RDO","Registered Address","Channel","EFPS Group","WTC","EWT","VAT","IT","Associate in charge","Reviewer/Senior associate in charge","Notes"];
+    const lines = [head.join(",")];
+    [...db.clients].sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
+      const tt = c.taxTypes||{};
+      lines.push([c.name,c.tin,c.rdo,c.address||"",c.channel,c.efpsGroup||"",
+        tt.WTC?"Y":"", tt.EWT?"Y":"", tt.VAT?"Y":"", tt.IT?"Y":"",
+        c.preparer||"", c.reviewer||"", c.notes||""
+      ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
+    });
+    downloadCsv(lines, `MSMA_${cluster}_masterlist.csv`);
+    return;
+  }
+  ret = activeReturn[view];
+  const p = periods[ret];
+  list = clientsFor(view);
+  const head = ["Client","TIN","RDO","Channel","EFPS Group","Associate in charge","Reviewer/Senior associate in charge","Stage","Flag","Tax Due","FRN",
+                ...STEPS.map(s=>s.label+" date"),"Notes"];
+  const lines = [head.join(",")];
+  list.forEach(c=>{
+    const rec = getRecord(ret, p, c.id);
+    const flag = flagFor(ret, c, p, rec);
+    lines.push([
+      c.name, c.tin, c.rdo, c.channel, c.efpsGroup||"", c.preparer||"", c.reviewer||"",
+      rec.stage>=STEPS.length ? "Archived" : rec.stage===0 ? "Not started" : STEPS[rec.stage-1].label,
+      flag.text, rec.taxDue||"", rec.ref||"",
+      ...STEPS.map(s=>rec.dates[s.key]||""), rec.notes||""
+    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
+  });
+  downloadCsv(lines, `MSMA_${cluster}_${RETURNS[ret].form.replace(/[\/ ]/g,"")}_${periodKey(ret,p)}.csv`);
+};
+function downloadCsv(lines, name){
+  const blob = new Blob([lines.join("\r\n")], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("CSV exported");
+}
+
+/* ============================================================
+   Overlays, toast, clock, boot
+============================================================ */
+document.querySelectorAll("[data-close]").forEach(b=>{
+  b.onclick = ()=> $(b.dataset.close).classList.remove("open");
+});
+document.querySelectorAll(".overlay").forEach(o=>{
+  o.addEventListener("mousedown", e=>{ if(e.target===o) o.classList.remove("open"); });
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeOverlays(); });
+function closeOverlays(){ document.querySelectorAll(".overlay").forEach(o=>o.classList.remove("open")); }
+
+let toastTimer;
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("show"), 2400);
+}
+
+function tickClock(){
+  const t = nowPST();
+  const el = $("pstClock");
+  if(el) el.innerHTML = `PST · <b>${MONTHS[t.m-1].slice(0,3)} ${t.d}, ${t.y} ${t.hh}:${t.mm}</b>`;
+}
+tickClock(); setInterval(tickClock, 30000);
+
+// restore session if the tab was already signed in
+(function boot(){
+  const saved = session.get("msma_cluster");
+  if(saved && CLUSTER_HASHES[saved]) enterApp(saved);
+})();
+</script>
+</body>
+</html>
