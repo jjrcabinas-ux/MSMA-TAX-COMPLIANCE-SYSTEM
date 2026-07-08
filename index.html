@@ -853,6 +853,37 @@ function atMinPeriod(ret, p){
   const f = RETURNS[ret].freq;
   return periodOrd(f, p) <= periodOrd(f, MIN_PERIOD[f]);
 }
+// Periods with no filing of their own:
+// · 0619-E/0619-F cover only the first two months of each quarter — the
+//   quarter-end month (Mar/Jun/Sep/Dec) is filed via 1601-EQ/1601-FQ instead
+// · 1702Q covers Q1–Q3 only — Q4 is folded into the annual return
+function hasFiling(ret, p){
+  if((ret==="0619E" || ret==="0619F") && p.m % 3 === 0) return false;
+  if(ret==="1702Q" && p.q === 4) return false;
+  return true;
+}
+function stepValid(ret, p, dir){       // adjacent period, skipping non-filing ones
+  let n = shiftPeriod(ret, p, dir);
+  while(!hasFiling(ret, n)) n = shiftPeriod(ret, n, dir);
+  return n;
+}
+function prevValidOrNull(ret, p){      // previous filing period, or null at the floor
+  const f = RETURNS[ret].freq;
+  const n = stepValid(ret, p, -1);
+  return periodOrd(f, n) < periodOrd(f, MIN_PERIOD[f]) ? null : n;
+}
+// latest closed period that actually has a filing (never below the floor)
+function validDefaultPeriod(ret){
+  const f = RETURNS[ret].freq;
+  let p = defaultPeriod(ret);
+  if(periodOrd(f, p) < periodOrd(f, MIN_PERIOD[f])) p = {...MIN_PERIOD[f]};
+  while(!hasFiling(ret, p)) p = shiftPeriod(ret, p, -1);
+  if(periodOrd(f, p) < periodOrd(f, MIN_PERIOD[f])){   // floor itself skipped: go forward
+    p = {...MIN_PERIOD[f]};
+    while(!hasFiling(ret, p)) p = shiftPeriod(ret, p, 1);
+  }
+  return p;
+}
 // every selectable period: floor → end of the current PST year
 // (extends to include the selected period if the user arrowed further ahead)
 function periodOptions(ret, sel){
@@ -864,7 +895,7 @@ function periodOptions(ret, sel){
     periodOrd(f, sel)
   );
   while(periodOrd(f, p) <= horizon){
-    opts.push(p);
+    if(hasFiling(ret, p)) opts.push(p);
     p = shiftPeriod(ret, p, 1);
   }
   return opts;
@@ -954,12 +985,8 @@ let editingClientId = null;
 let searchQ = "", filterFlag = "", filterChan = "";
 let dashScope = "all";           // Main Tracker period scope: "all" or a year string
 
-Object.keys(RETURNS).forEach(r => {
-  const p = defaultPeriod(r);
-  const f = RETURNS[r].freq;
-  // never start below the system floor (Jan 2026 / Q1 2026 / TY 2025)
-  periods[r] = periodOrd(f, p) < periodOrd(f, MIN_PERIOD[f]) ? {...MIN_PERIOD[f]} : p;
-});
+// start each return at its latest closed period that actually has a filing (≥ floor)
+Object.keys(RETURNS).forEach(r => { periods[r] = validDefaultPeriod(r); });
 Object.keys(TAX_PAGES).forEach(t => activeReturn[t] = TAX_PAGES[t].returns[0]);
 
 function escapeHtml(s){
@@ -1156,8 +1183,9 @@ function renderDashboard(){
     attRows.push(...rows);
     const pct = s.total ? Math.round(100*s.filed/s.total) : 0;
 
-    // current-cycle deadline (existing PST-pinned logic) drives escalation
-    const gDL = deadlineFor(ret, {channel:"eBIR"}, defaultPeriod(ret)).file;
+    // current-cycle deadline (existing PST-pinned logic) drives escalation;
+    // uses the latest period that actually has a filing (0619s skip Mar/Jun/Sep/Dec, 1702Q skips Q4)
+    const gDL = deadlineFor(ret, {channel:"eBIR"}, validDefaultPeriod(ret)).file;
     const dleft = daysBetween(todayInt(), gDL);
 
     // border status (item 2): red if ≤3 days or any at-risk, amber if ≤7 days, else green
@@ -1367,7 +1395,7 @@ function renderTaxPage(taxType){
     <div class="page-head">
       <h1>${page.title}</h1>
       <div class="period-nav">
-        <button id="prevPeriod" aria-label="Previous period" ${atMinPeriod(ret,p)?"disabled":""}>‹</button>
+        <button id="prevPeriod" aria-label="Previous period" ${prevValidOrNull(ret,p)?"":"disabled"}>‹</button>
         <select class="period-label" id="periodSel" aria-label="Jump to period" onchange="setPeriod('${ret}', this.value)">
           ${periodOptions(ret, p).map(o=>`<option value="${periodKey(ret,o)}" ${periodKey(ret,o)===periodKey(ret,p)?"selected":""}>${periodLabel(ret,o)}</option>`).join("")}
         </select>
@@ -1428,10 +1456,10 @@ function wirePageEvents(){
     const ret = activeReturn[view];
     const pv = $("prevPeriod"), nx = $("nextPeriod");
     if(pv) pv.onclick = ()=>{
-      if(atMinPeriod(ret, periods[ret])) return;   // floor: nothing before Jan 2026
-      periods[ret] = shiftPeriod(ret, periods[ret], -1); render();
+      const prev = prevValidOrNull(ret, periods[ret]);   // skips non-filing periods; null at floor
+      if(prev){ periods[ret] = prev; render(); }
     };
-    if(nx) nx.onclick = ()=>{ periods[ret] = shiftPeriod(ret, periods[ret], 1); render(); };
+    if(nx) nx.onclick = ()=>{ periods[ret] = stepValid(ret, periods[ret], 1); render(); };
     document.querySelectorAll(".subtab").forEach(b=>{
       b.onclick = ()=>{ activeReturn[view] = b.dataset.ret; render(); };
     });
