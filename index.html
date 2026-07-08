@@ -40,6 +40,8 @@
     background-size:cover; background-position:center 22%; background-repeat:no-repeat;
   }
   .login-card .brand-logo{display:block; width:auto; height:56px; max-width:260px; margin-bottom:22px;}
+  .login-card .brand-fallback{display:none; margin-bottom:22px; font-weight:800; font-size:1.12rem; letter-spacing:.04em; color:#1c3252; line-height:1.2;}
+  .login-card .brand-fallback span{display:block; font-size:.72rem; letter-spacing:.2em; color:#3a557d; margin-top:3px; font-weight:700;}
   .login-visual .visual-foot{max-width:470px;}
   .login-visual .visual-foot .rule{width:46px; height:3px; border-radius:2px; background:var(--brand-lime); margin-bottom:16px;}
   .login-visual .visual-foot h2{font-size:1.55rem; font-weight:700; line-height:1.28; letter-spacing:.2px;}
@@ -394,7 +396,9 @@
 
   <div class="login-panel">
     <div class="login-card">
-      <img class="brand-logo" src="assets/logo.png" alt="Mora, Sanchez, Meñoza and Associates">
+      <img class="brand-logo" src="assets/logo.png" alt="Mora, Sanchez, Meñoza and Associates"
+           onerror="this.remove(); var f=document.getElementById('brandFallback'); if(f) f.style.display='block';">
+      <div class="brand-fallback" id="brandFallback">MORA, SANCHEZ, MEÑOZA<span>AND ASSOCIATES</span></div>
       <h1>Tax Compliance System</h1>
       <div class="tag">Select your cluster to continue</div>
       <div class="login-err" id="loginErr"></div>
