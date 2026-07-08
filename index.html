@@ -658,6 +658,11 @@ function startSync(){
 }
 // if Firebase finishes loading after we're already signed in (session restore)
 window.addEventListener("firebase-ready", startSync);
+// (re)start sync once Firebase auth is confirmed; drop it when signed out
+window.addEventListener("firebase-auth", e=>{
+  if(e.detail.signedIn){ if(cluster) startSync(); }
+  else if(window.fbApi){ window.fbApi.unsubscribe(); }
+});
 
 /* ============================================================
    Return definitions & deadline logic
@@ -836,6 +841,12 @@ function tryLogin(){
     void err.offsetWidth; err.classList.add("show");
     $("loginPw").select(); return;
   }
+  // sign in to Firebase so cloud sync is allowed (password == cluster password).
+  // Fire-and-forget: the app still works locally/offline if this fails.
+  if(window.fbAuth){
+    window.fbAuth.signIn(selCluster, pw)
+      .catch(e => console.warn("[auth] Firebase sign-in failed:", e.code || e.message));
+  }
   session.set("msma_cluster", selCluster);
   enterApp(selCluster);
 }
@@ -856,6 +867,7 @@ function enterApp(cl){
 $("btnLogout").onclick = ()=>{
   session.del("msma_cluster");
   if(window.fbApi) window.fbApi.unsubscribe();
+  if(window.fbAuth) window.fbAuth.signOutUser().catch(()=>{});
   cluster = null; db = null;
   $("appScreen").style.display = "none";
   $("loginScreen").style.display = "flex";
@@ -1387,6 +1399,8 @@ tickClock(); setInterval(tickClock, 1000);
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, onSnapshot, setDoc, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBmtq8PLArySq5EkUIVQA-GD8XBhO_Wurc",
@@ -1401,6 +1415,24 @@ tickClock(); setInterval(tickClock, 1000);
 
   const app = initializeApp(firebaseConfig);
   const fs  = getFirestore(app);
+  const auth = getAuth(app);
+
+  // Per-cluster Firebase account (password == the cluster password the user types).
+  const clusterEmail = c => c.toLowerCase() + "@msma.app";
+  window.fbAuth = {
+    signIn(cluster, password){
+      return signInWithEmailAndPassword(auth, clusterEmail(cluster), password);
+    },
+    signOutUser(){ return signOut(auth); },
+    currentEmail(){ return auth.currentUser ? auth.currentUser.email : null; }
+  };
+  // Tell the main script whenever the signed-in state changes (also fires on
+  // reload once Firebase restores a persisted session).
+  onAuthStateChanged(auth, user => {
+    window.dispatchEvent(new CustomEvent("firebase-auth", {
+      detail: { signedIn: !!user, email: user ? user.email : null }
+    }));
+  });
 
   const chip = document.getElementById("syncChip");
   function setStatus(state){            // 'syncing' | 'online' | 'offline' | 'hidden'
