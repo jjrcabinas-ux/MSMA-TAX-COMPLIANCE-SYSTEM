@@ -95,6 +95,7 @@
     border:none; background:transparent; color:var(--muted); width:34px; height:34px; border-radius:8px;
   }
   .pw-wrap .eye:hover:not(:disabled){background:var(--paper);}
+  .pw-wrap .eye.active{color:var(--ink); background:var(--paper);}
   .pw-wrap .eye:disabled{opacity:.4; cursor:not-allowed;}
   .login-err{color:var(--red); font-size:.82rem; font-weight:600; margin:0 0 12px; display:none;}
   .login-err.show{display:block; animation:shake .3s;}
@@ -877,9 +878,10 @@ document.querySelectorAll(".cluster-opt").forEach(b=>{
 });
 $("pwEye").onclick = ()=>{
   const i = $("loginPw");
-  const showing = i.type === "password";
-  i.type = showing ? "text" : "password";
-  $("pwEye").setAttribute("aria-label", showing ? "Hide password" : "Show password");
+  const reveal = i.type === "password";   // this click reveals the password
+  i.type = reveal ? "text" : "password";
+  $("pwEye").classList.toggle("active", reveal);
+  $("pwEye").setAttribute("aria-label", reveal ? "Hide password" : "Show password");
 };
 function tryLogin(){
   const err = $("loginErr");
@@ -931,7 +933,8 @@ $("btnLogout").onclick = ()=>{
   selCluster = null;
   // reset the login form to its initial (locked) state
   const btn = $("btnLogin"); btn.classList.remove("loading"); btn.disabled = true;
-  $("loginPw").disabled = true; $("loginPw").value = ""; $("pwEye").disabled = true;
+  $("loginPw").disabled = true; $("loginPw").value = ""; $("loginPw").type = "password";
+  $("pwEye").disabled = true; $("pwEye").classList.remove("active"); $("pwEye").setAttribute("aria-label", "Show password");
   $("loginErr").classList.remove("show");
 };
 
