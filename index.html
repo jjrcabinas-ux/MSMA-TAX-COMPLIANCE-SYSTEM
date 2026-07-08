@@ -220,11 +220,34 @@
     border:1px solid var(--line); background:var(--surface); border-radius:8px;
     padding:6px 14px; font-weight:600; min-width:150px; text-align:center;
   }
-  .period-nav select.period-label{
-    cursor:pointer; outline:none; text-align-last:center; height:34px;
+  /* custom period picker (replaces the unstylable native select) */
+  .period-pick{position:relative;}
+  .period-btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    cursor:pointer; height:34px; outline:none;
   }
-  .period-nav select.period-label:hover{border-color:var(--accent);}
-  .period-nav select.period-label:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .period-btn:hover{border-color:var(--accent);}
+  .period-btn:focus-visible{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .period-btn .chev{width:14px; height:14px; color:var(--muted); transition:transform .18s ease;}
+  .period-pick.open .period-btn .chev{transform:rotate(180deg);}
+  .period-pop{
+    position:absolute; top:calc(100% + 8px); right:0; z-index:60; display:none;
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    box-shadow:0 18px 44px rgba(15,25,35,.16); padding:14px; min-width:252px;
+  }
+  .period-pick.open .period-pop{display:block;}
+  .pp-year{font-size:.7rem; font-weight:800; letter-spacing:.1em; color:var(--muted); margin:2px 2px 8px;}
+  .pp-year:not(:first-child){margin-top:12px;}
+  .pp-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px;}
+  .pp-grid.pp-q{grid-template-columns:repeat(4,1fr);}
+  .pp-grid.pp-a{grid-template-columns:repeat(3,1fr);}
+  .pp-opt{
+    border:1px solid var(--line); border-radius:8px; background:var(--surface);
+    padding:8px 2px; font-size:.78rem; font-weight:600; color:var(--ink-soft); text-align:center;
+    transition:border-color .12s, background .12s, color .12s;
+  }
+  .pp-opt:hover{border-color:var(--accent); color:var(--accent-deep); background:var(--accent-soft);}
+  .pp-opt.sel{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700;}
   .subtabs{display:flex; gap:8px; margin-bottom:16px;}
   .subtab{
     border:1px solid var(--line); background:var(--surface); border-radius:999px;
@@ -1548,9 +1571,29 @@ function renderTaxPage(taxType){
       <h1>${page.title}</h1>
       <div class="period-nav">
         <button id="prevPeriod" aria-label="Previous period" ${prevValidOrNull(ret,p)?"":"disabled"}>‹</button>
-        <select class="period-label" id="periodSel" aria-label="Jump to period" onchange="setPeriod('${ret}', this.value)">
-          ${periodOptions(ret, p).map(o=>`<option value="${periodKey(ret,o)}" ${periodKey(ret,o)===periodKey(ret,p)?"selected":""}>${periodLabel(ret,o)}</option>`).join("")}
-        </select>
+        <div class="period-pick" id="periodPick">
+          <button class="period-label period-btn" id="periodBtn" aria-label="Jump to period"
+                  onclick="event.stopPropagation(); document.getElementById('periodPick').classList.toggle('open');">
+            <span id="periodBtnLabel">${periodLabel(ret,p)}</span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="period-pop" onclick="event.stopPropagation();">
+            ${(()=>{
+              const f = RETURNS[ret].freq;
+              const byYear = {};
+              periodOptions(ret, p).forEach(o=>{ (byYear[o.y] = byYear[o.y] || []).push(o); });
+              return Object.keys(byYear).sort().map(y=>{
+                const grid = byYear[y].map(o=>{
+                  const pk = periodKey(ret,o), sel = pk===periodKey(ret,p) ? " sel" : "";
+                  const label = f==="M" ? MONTHS[o.m-1].slice(0,3) : f==="Q" ? "Q"+o.q : "TY "+o.y;
+                  return `<button class="pp-opt${sel}" title="${periodLabel(ret,o)}" onclick="setPeriod('${ret}','${pk}')">${label}</button>`;
+                }).join("");
+                const gridCls = f==="M" ? "" : f==="Q" ? " pp-q" : " pp-a";
+                return (f==="A" ? "" : `<div class="pp-year">${y}</div>`) + `<div class="pp-grid${gridCls}">${grid}</div>`;
+              }).join("");
+            })()}
+          </div>
+        </div>
         <button id="nextPeriod" aria-label="Next period">›</button>
       </div>
       <div class="sub">${R.form} — ${escapeHtml(R.name)} · ${list.length} applicable client${list.length===1?"":"s"} in the ${cluster} Cluster</div>
@@ -1869,6 +1912,17 @@ document.querySelectorAll(".overlay").forEach(o=>{
   o.addEventListener("mousedown", e=>{ if(e.target===o) o.classList.remove("open"); });
 });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeOverlays(); });
+// close the period picker on outside click or Escape
+document.addEventListener("click", ()=>{
+  const pick = document.getElementById("periodPick");
+  if(pick) pick.classList.remove("open");
+});
+document.addEventListener("keydown", e=>{
+  if(e.key==="Escape"){
+    const pick = document.getElementById("periodPick");
+    if(pick) pick.classList.remove("open");
+  }
+});
 function closeOverlays(){
   document.querySelectorAll(".overlay").forEach(o=>o.classList.remove("open"));
   if(pendingRemote){ pendingRemote = false; if(cluster) render(); }
