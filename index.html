@@ -1018,7 +1018,7 @@ function render(){
   document.querySelectorAll(".nav-item[data-view]").forEach(b=>{
     b.classList.toggle("active", b.dataset.view === view);
   });
-  $("taxParent").classList.toggle("active", !!TAX_PAGES[view]);
+  $("taxParent").classList.remove("active");   // parent never highlights; only the active sub-item does
   const el = $("mainContent");
   if(view==="dashboard") el.innerHTML = renderDashboard();
   else if(view==="masterlist") el.innerHTML = renderMasterlist();
