@@ -157,6 +157,48 @@
     .login-panel{flex:1 1 100%; min-width:0; padding:28px 18px;}
   }
 
+  /* ===== login-success animation: BIR returns sucked into a computer ===== */
+  #warpOverlay{
+    position:fixed; inset:0; z-index:100; display:none;
+    align-items:center; justify-content:center; overflow:hidden;
+    background:
+      radial-gradient(820px 520px at 50% 38%, rgba(52,118,180,.22), transparent 60%),
+      linear-gradient(158deg, #0c1826 0%, #0a1420 46%, #070f17 100%);
+    opacity:1; transition:opacity .45s ease;
+  }
+  #warpOverlay.show{display:flex;}
+  #warpOverlay.fade{opacity:0;}
+  .warp-stage{position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:24px;}
+  .warp-monitor{
+    filter:drop-shadow(0 0 26px rgba(62,201,184,.40));
+    animation:warpPulse 1.1s ease-in-out infinite;
+    transition:filter .3s ease, transform .3s ease;
+  }
+  #warpOverlay.finish .warp-monitor{
+    filter:drop-shadow(0 0 60px rgba(120,240,220,.95)) brightness(1.6);
+    transform:scale(1.07);
+    animation:none;
+  }
+  @keyframes warpPulse{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.025);} }
+  .warp-caption{color:rgba(220,235,250,.78); font-weight:700; font-size:.95rem; letter-spacing:.08em;}
+  .warp-dots::after{content:""; animation:warpDots 1.2s steps(4,end) infinite;}
+  @keyframes warpDots{ 0%{content:"";} 25%{content:".";} 50%{content:"..";} 75%{content:"...";} 100%{content:"";} }
+  .warp-docs{position:absolute; inset:0; z-index:1; pointer-events:none;}
+  .warp-doc{
+    position:absolute; top:50%; left:50%; width:76px; padding:9px 10px 10px;
+    background:#fff; border-radius:6px; box-shadow:0 8px 22px rgba(0,0,0,.45);
+    opacity:0; animation:warpSuck 1s cubic-bezier(.55,.06,.68,.19) both;
+  }
+  .warp-doc b{display:block; font-size:.6rem; font-weight:800; color:#0f766e; letter-spacing:.04em; margin-bottom:5px;}
+  .warp-doc i{display:block; height:3px; border-radius:2px; background:#d7dee5; margin-top:3px;}
+  .warp-doc i:last-child{width:62%;}
+  @keyframes warpSuck{
+    0%  { transform:translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) rotate(var(--sr)) scale(1); opacity:0; }
+    12% { opacity:1; }
+    55% { transform:translate(calc(-50% + var(--mx)), calc(-50% + var(--my))) rotate(calc(var(--er) * .45)) scale(.55); opacity:1; }
+    100%{ transform:translate(-50%,-50%) rotate(var(--er)) scale(.04); opacity:.1; }
+  }
+
   /* =================== APP CHROME =================== */
   #appScreen{display:none;}
   .topbar{
@@ -780,6 +822,30 @@
   </div>
 </div>
 
+<!-- ============================================================
+     LOGIN-SUCCESS ANIMATION — BIR returns sucked into a computer
+============================================================ -->
+<div id="warpOverlay" aria-hidden="true">
+  <div class="warp-docs" id="warpDocs"></div>
+  <div class="warp-stage">
+    <svg class="warp-monitor" width="170" height="146" viewBox="0 0 170 146" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="warpScr" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0e3a37"/>
+          <stop offset="55%" stop-color="#0f766e"/>
+          <stop offset="100%" stop-color="#0b4a45"/>
+        </linearGradient>
+      </defs>
+      <rect x="10" y="8" width="150" height="100" rx="12" fill="#0d1b2a" stroke="rgba(170,225,255,.55)" stroke-width="2"/>
+      <rect x="20" y="18" width="130" height="80" rx="7" fill="url(#warpScr)"/>
+      <text x="85" y="63" text-anchor="middle" fill="#c9f5ee" font-size="15" font-weight="800" letter-spacing="3">MSMA</text>
+      <rect x="71" y="110" width="28" height="13" rx="3" fill="#122a40"/>
+      <rect x="50" y="125" width="70" height="8" rx="4" fill="#122a40"/>
+    </svg>
+    <div class="warp-caption"><span id="warpCaption">Entering Cluster</span><span class="warp-dots"></span></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1188,7 +1254,41 @@ function tryLogin(){
       .catch(e => console.warn("[auth] Firebase sign-in failed:", e.code || e.message));
   }
   session.set("msma_cluster", selCluster);
-  setTimeout(()=> enterApp(selCluster), 550);
+  if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    setTimeout(()=> enterApp(selCluster), 400);   // skip the animation
+  } else {
+    playEnterAnimation(selCluster, ()=> enterApp(selCluster));
+  }
+}
+
+/* ---- login-success animation: BIR returns sucked into the computer ---- */
+function playEnterAnimation(cl, done){
+  const ov = $("warpOverlay"), wrap = $("warpDocs");
+  $("warpCaption").textContent = "Entering " + cl + " Cluster";
+  wrap.innerHTML = "";
+  const forms = ["1601-C","0619-E","1601-EQ","0619-F","1601-FQ","1600-VT","2550Q","2000",
+                 "1603Q","1702Q","1702","1601-C","2550Q","0619-E"];
+  const R = Math.max(window.innerWidth, window.innerHeight) * 0.55;
+  forms.forEach((f, i)=>{
+    const d = document.createElement("div");
+    d.className = "warp-doc";
+    const ang  = (i / forms.length) * Math.PI * 2 + Math.random() * 0.45;
+    const dist = R * (0.85 + Math.random() * 0.45);
+    d.style.setProperty("--sx", Math.round(Math.cos(ang) * dist) + "px");
+    d.style.setProperty("--sy", Math.round(Math.sin(ang) * dist * 0.72) + "px");
+    d.style.setProperty("--mx", Math.round(Math.cos(ang + 1.3) * 70) + "px");
+    d.style.setProperty("--my", Math.round(Math.sin(ang + 1.3) * 46) + "px");
+    d.style.setProperty("--sr", Math.round(Math.random() * 44 - 22) + "deg");
+    d.style.setProperty("--er", Math.round(200 + Math.random() * 340) + "deg");
+    d.style.animationDelay = (Math.random() * 1.0).toFixed(2) + "s";
+    d.style.animationDuration = (0.85 + Math.random() * 0.5).toFixed(2) + "s";
+    d.innerHTML = `<b>${f}</b><i></i><i></i><i></i>`;
+    wrap.appendChild(d);
+  });
+  ov.classList.add("show");
+  setTimeout(()=> ov.classList.add("finish"), 1950);          // all absorbed → screen flash
+  setTimeout(()=> { done(); ov.classList.add("fade"); }, 2350); // reveal the app beneath
+  setTimeout(()=> { ov.classList.remove("show","finish","fade"); wrap.innerHTML=""; }, 2850);
 }
 $("btnLogin").onclick = tryLogin;
 $("loginPw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); });
