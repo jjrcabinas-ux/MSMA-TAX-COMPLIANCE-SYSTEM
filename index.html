@@ -724,11 +724,24 @@ function loadDb(){
     }
   });
 }
+let lastSyncedClientCount = null;   // clients in the last state seen from/pushed to the cloud
 function save(){
+  // Wipe guard: a normal delete removes ONE client at a time. If this save
+  // would drop 2+ clients vs. the last synced state, something is wrong
+  // (stale tab, buggy session) — require explicit confirmation.
+  const n = db.clients.length;
+  if(lastSyncedClientCount !== null && n < lastSyncedClientCount - 1){
+    const lost = lastSyncedClientCount - n;
+    if(!window.confirm(`⚠ This save would remove ${lost} clients from the ${cluster} masterlist. This is usually a mistake.\n\nSave anyway?`)){
+      toast("Save blocked — reload the page to restore the masterlist");
+      return;
+    }
+  }
   const payload = JSON.stringify(db);
   store.set(dbKey(), payload);
   // push to realtime backend (no-op until Firebase is ready)
   if(cluster && window.fbApi) window.fbApi.push(cluster, payload);
+  lastSyncedClientCount = n;
 }
 
 /* ---- Realtime sync glue (used by the Firebase module below) ---- */
@@ -737,6 +750,7 @@ function applyRemote(payloadString){
   let incoming;
   try { incoming = JSON.parse(payloadString); } catch(e){ return; }
   if(!incoming || typeof incoming !== "object") return;
+  lastSyncedClientCount = Array.isArray(incoming.clients) ? incoming.clients.length : 0;
   if(JSON.stringify(db) === payloadString) return;   // no change vs. local
   db = incoming;
   if(!db.clients) db.clients = [];
@@ -1017,6 +1031,7 @@ $("loginPw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); })
 function enterApp(cl){
   cluster = cl;
   loadDb();
+  lastSyncedClientCount = db.clients.length;   // baseline until the cloud state arrives
   $("brandWord").textContent = "MSMA " + cluster + " Cluster";
   $("clusterPill").textContent = cluster;
   $("clusterPill").className = "cluster-pill c-" + cluster;
@@ -1031,7 +1046,7 @@ $("btnLogout").onclick = ()=>{
   session.del("msma_cluster");
   if(window.fbApi) window.fbApi.unsubscribe();
   if(window.fbAuth) window.fbAuth.signOutUser().catch(()=>{});
-  cluster = null; db = null;
+  cluster = null; db = null; lastSyncedClientCount = null;
   $("appScreen").style.display = "none";
   $("loginScreen").style.display = "flex";
   document.querySelectorAll(".cluster-opt").forEach(x=>x.classList.remove("sel"));
@@ -1633,7 +1648,8 @@ tickClock(); setInterval(tickClock, 1000);
 ============================================================ -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, doc, onSnapshot, setDoc, serverTimestamp }
+  import { getFirestore, doc, onSnapshot, setDoc, serverTimestamp,
+           collection, query, orderBy, getDocs, deleteDoc }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -1698,12 +1714,35 @@ tickClock(); setInterval(tickClock, 1000);
   // keep the "Xm ago" fresh while synced
   setInterval(()=>{ if(syncState === "online") paintSync(); }, 30000);
 
+  // Dev isolation: local previews (localhost) read/write DEV_-prefixed
+  // sandbox workspaces so ongoing edits can never touch production data.
+  const WS_PREFIX = (location.hostname === "localhost" || location.hostname === "127.0.0.1") ? "DEV_" : "";
+  const wsId  = c => WS_PREFIX + c;
+  const wsDoc = c => doc(fs, "workspaces", wsId(c));
+  const HISTORY_KEEP = 30;
+
+  // Version history: every push also stores a timestamped snapshot under
+  // workspaces/{cluster}/history so any overwrite can be rolled back.
+  function writeHistory(cluster, payloadString){
+    const ts = new Date().toISOString();
+    setDoc(doc(fs, "workspaces", wsId(cluster), "history", ts),
+           { payload: payloadString, at: serverTimestamp() })
+      .then(()=>{ if(Math.random() < 0.2) pruneHistory(cluster); })
+      .catch(err => console.warn("[history] snapshot failed:", err.code || err.message));
+  }
+  function pruneHistory(cluster){
+    getDocs(query(collection(fs, "workspaces", wsId(cluster), "history"), orderBy("__name__", "desc")))
+      .then(qs => {
+        qs.docs.slice(HISTORY_KEEP).forEach(d => deleteDoc(d.ref).catch(()=>{}));
+      }).catch(()=>{});
+  }
+
   window.fbApi = {
     _unsub: null,
     subscribe(cluster, onRemote, seedFn){
       this.unsubscribe();
       setStatus("syncing");
-      const ref = doc(fs, "workspaces", cluster);
+      const ref = wsDoc(cluster);
       this._unsub = onSnapshot(ref, snap => {
         if(snap.metadata.hasPendingWrites) return;          // ignore our own write echo
         setStatus(snap.metadata.fromCache ? "syncing" : "online");
@@ -1718,9 +1757,9 @@ tickClock(); setInterval(tickClock, 1000);
     },
     push(cluster, payloadString){
       setStatus("syncing");
-      setDoc(doc(fs, "workspaces", cluster),
+      setDoc(wsDoc(cluster),
              { payload: payloadString, updatedAt: serverTimestamp() })
-        .then(()  => setStatus("online"))
+        .then(()  => { setStatus("online"); writeHistory(cluster, payloadString); })
         .catch(err => { console.error("[sync] push error:", err); setStatus("offline"); });
     },
     unsubscribe(){
