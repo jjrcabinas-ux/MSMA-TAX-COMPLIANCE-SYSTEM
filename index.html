@@ -152,7 +152,12 @@
   .submenu.open{max-height:240px;}
   .submenu .nav-item{padding-left:48px; font-size:.92rem;}
   body.nav-min .submenu .nav-item{padding-left:14px;}
-  .nav-bottom{margin-top:auto; border-top:1px solid var(--line); padding-top:8px;}
+  .nav-bottom{margin-top:auto; border-top:1px solid var(--line); padding:12px 12px 6px; display:flex; flex-direction:column; gap:10px;}
+  .nav-bottom .pst-clock{font-size:.78rem; line-height:1.35;}
+  .nav-bottom .logout-btn{width:100%; text-align:center;}
+  body.nav-min .nav-bottom .pst-clock{display:none;}
+  body.nav-min .nav-bottom{padding:12px 8px 6px;}
+  body.nav-min .nav-bottom .logout-btn{padding:6px 4px; font-size:.68rem;}
 
   /* =================== MAIN =================== */
   .main{margin:56px 0 0 var(--sidebar-w); padding:22px 26px 60px; transition:margin .18s ease;}
@@ -390,10 +395,8 @@
       <span class="word" id="brandWord">MSMA</span>
       <span class="app">Tax Compliance System</span>
     </div>
-    <span class="sync-chip" id="syncChip" title="Realtime sync status"><span class="dot"></span><span class="txt">Offline</span></span>
     <div class="spacer"></div>
-    <div class="pst-clock" id="pstClock"></div>
-    <button class="logout-btn" id="btnLogout">Log out</button>
+    <span class="sync-chip" id="syncChip" title="Realtime sync status"><span class="dot"></span><span class="txt">Offline</span></span>
   </div>
 
   <nav class="sidebar" id="sidebar">
@@ -419,10 +422,8 @@
     </div>
 
     <div class="nav-bottom">
-      <button class="nav-item" id="navExport">
-        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span class="label">Export current view</span>
-      </button>
+      <div class="pst-clock" id="pstClock"></div>
+      <button class="logout-btn" id="btnLogout">Log out</button>
     </div>
   </nav>
 
@@ -1329,53 +1330,6 @@ $("btnSaveRec").onclick = ()=>{
   rec.notes = $("rNotes").value.trim();
   save(); closeOverlays(); render(); toast("Filing detail saved");
 };
-
-/* ============================================================
-   Export current view
-============================================================ */
-$("navExport").onclick = ()=>{
-  let ret, filename, list;
-  if(view === "masterlist" || view === "dashboard"){
-    // export masterlist
-    const head = ["Client","TIN","RDO","Registered Address","Channel","EFPS Group","WTC","EWT","VAT","IT","Associate in charge","Reviewer/Senior associate in charge","Notes"];
-    const lines = [head.join(",")];
-    [...db.clients].sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{
-      const tt = c.taxTypes||{};
-      lines.push([c.name,c.tin,c.rdo,c.address||"",c.channel,c.efpsGroup||"",
-        tt.WTC?"Y":"", tt.EWT?"Y":"", tt.VAT?"Y":"", tt.IT?"Y":"",
-        c.preparer||"", c.reviewer||"", c.notes||""
-      ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
-    });
-    downloadCsv(lines, `MSMA_${cluster}_masterlist.csv`);
-    return;
-  }
-  ret = activeReturn[view];
-  const p = periods[ret];
-  list = clientsFor(view);
-  const head = ["Client","TIN","RDO","Channel","EFPS Group","Associate in charge","Reviewer/Senior associate in charge","Stage","Flag","Tax Due","FRN",
-                ...STEPS.map(s=>s.label+" date"),"Notes"];
-  const lines = [head.join(",")];
-  list.forEach(c=>{
-    const rec = getRecord(ret, p, c.id);
-    const flag = flagFor(ret, c, p, rec);
-    lines.push([
-      c.name, c.tin, c.rdo, c.channel, c.efpsGroup||"", c.preparer||"", c.reviewer||"",
-      rec.stage>=STEPS.length ? "Archived" : rec.stage===0 ? "Not started" : STEPS[rec.stage-1].label,
-      flag.text, rec.taxDue||"", rec.ref||"",
-      ...STEPS.map(s=>rec.dates[s.key]||""), rec.notes||""
-    ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","));
-  });
-  downloadCsv(lines, `MSMA_${cluster}_${RETURNS[ret].form.replace(/[\/ ]/g,"")}_${periodKey(ret,p)}.csv`);
-};
-function downloadCsv(lines, name){
-  const blob = new Blob([lines.join("\r\n")], {type:"text/csv"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast("CSV exported");
-}
 
 /* ============================================================
    Overlays, toast, clock, boot
