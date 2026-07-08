@@ -193,7 +193,7 @@
   .submenu{
     overflow:hidden; max-height:0; transition:max-height .5s ease;
   }
-  .submenu.open{max-height:240px;}
+  .submenu.open{max-height:480px;}
   .submenu .nav-item{padding-left:48px; font-size:.92rem;}
   body.nav-min .submenu .nav-item{padding-left:14px;}
   .nav-bottom{margin-top:auto; border-top:1px solid var(--line); padding:12px 12px 6px; display:flex; flex-direction:column; gap:10px;}
@@ -338,6 +338,10 @@
   .ret-card .rc-tax.t-WTC{color:#4f46e5; background:#eef2ff;}
   .ret-card .rc-tax.t-EWT{color:#0f766e; background:#e6f3f1;}
   .ret-card .rc-tax.t-VAT{color:#b45309; background:#fdf3e3;}
+  .ret-card .rc-tax.t-FWT{color:#0e7490; background:#e6f5fa;}
+  .ret-card .rc-tax.t-WVAT{color:#c2410c; background:#fdeee4;}
+  .ret-card .rc-tax.t-DST{color:#be185d; background:#fce9f1;}
+  .ret-card .rc-tax.t-FBT{color:#7c3aed; background:#f2e9fc;}
   .ret-card .rc-meta{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:15px;}
   .ret-card .rc-cycle{font-size:.74rem; font-weight:700; color:var(--ink-soft); background:var(--paper); padding:3px 9px; border-radius:6px;}
   .ret-card .rc-due{display:inline-flex; align-items:center; gap:5px; font-size:.74rem; font-weight:600; color:var(--muted);}
@@ -517,7 +521,11 @@
     <div class="submenu" id="taxSubmenu">
       <button class="nav-item" data-view="WTC"><span class="label">WTC · Compensation</span></button>
       <button class="nav-item" data-view="EWT"><span class="label">EWT · Expanded</span></button>
+      <button class="nav-item" data-view="FWT"><span class="label">FWT · Final</span></button>
+      <button class="nav-item" data-view="WVAT"><span class="label">WVAT · Withholding VAT</span></button>
       <button class="nav-item" data-view="VAT"><span class="label">VAT</span></button>
+      <button class="nav-item" data-view="DST"><span class="label">DST · Documentary Stamp</span></button>
+      <button class="nav-item" data-view="FBT"><span class="label">FBT · Fringe Benefits</span></button>
       <button class="nav-item" data-view="IT"><span class="label">IT · Income Tax</span></button>
     </div>
 
@@ -570,7 +578,11 @@
         <div class="tax-chips" id="taxChips">
           <button type="button" class="tax-chip" data-tax="WTC">WTC</button>
           <button type="button" class="tax-chip" data-tax="EWT">EWT</button>
+          <button type="button" class="tax-chip" data-tax="FWT">FWT</button>
+          <button type="button" class="tax-chip" data-tax="WVAT">WVAT</button>
           <button type="button" class="tax-chip" data-tax="VAT">VAT</button>
+          <button type="button" class="tax-chip" data-tax="DST">DST</button>
+          <button type="button" class="tax-chip" data-tax="FBT">FBT</button>
           <button type="button" class="tax-chip" data-tax="IT">IT</button>
         </div>
       </div>
@@ -770,18 +782,27 @@ const EFPS_DAYS = {A:15,B:14,C:13,D:12,E:11};
 
 // freq: M (monthly), Q (quarterly), A (annual)
 const RETURNS = {
-  "1601C":  { tax:"WTC", form:"1601-C",  name:"Withholding Tax on Compensation", freq:"M" },
-  "0619E":  { tax:"EWT", form:"0619-E",  name:"Expanded WT — Monthly Remittance", freq:"M" },
-  "1601EQ": { tax:"EWT", form:"1601-EQ", name:"Expanded WT — Quarterly Return",   freq:"Q" },
-  "2550Q":  { tax:"VAT", form:"2550Q",   name:"Quarterly Value-Added Tax Return", freq:"Q" },
-  "1702Q":  { tax:"IT",  form:"1702Q/1701Q", name:"Quarterly Income Tax Return",  freq:"Q" },
-  "1702":   { tax:"IT",  form:"1702/1701",   name:"Annual Income Tax Return",     freq:"A" }
+  "1601C":  { tax:"WTC",  form:"1601-C",  name:"Withholding Tax on Compensation", freq:"M" },
+  "0619E":  { tax:"EWT",  form:"0619-E",  name:"Expanded WT — Monthly Remittance", freq:"M" },
+  "1601EQ": { tax:"EWT",  form:"1601-EQ", name:"Expanded WT — Quarterly Return",   freq:"Q" },
+  "0619F":  { tax:"FWT",  form:"0619-F",  name:"Final WT — Monthly Remittance",    freq:"M" },
+  "1601FQ": { tax:"FWT",  form:"1601-FQ", name:"Final WT — Quarterly Return",      freq:"Q" },
+  "1600VT": { tax:"WVAT", form:"1600-VT", name:"Monthly Remittance of VAT Withheld", freq:"M" },
+  "2550Q":  { tax:"VAT",  form:"2550Q",   name:"Quarterly Value-Added Tax Return", freq:"Q" },
+  "2000":   { tax:"DST",  form:"2000",    name:"Documentary Stamp Tax Return",     freq:"M" },
+  "1603Q":  { tax:"FBT",  form:"1603Q",   name:"Fringe Benefits Tax — Quarterly",  freq:"Q" },
+  "1702Q":  { tax:"IT",   form:"1702Q/1701Q", name:"Quarterly Income Tax Return",  freq:"Q" },
+  "1702":   { tax:"IT",   form:"1702/1701",   name:"Annual Income Tax Return",     freq:"A" }
 };
 const TAX_PAGES = {
-  WTC: { title:"Withholding Tax — Compensation", returns:["1601C"] },
-  EWT: { title:"Withholding Tax — Expanded",     returns:["0619E","1601EQ"] },
-  VAT: { title:"Value-Added Tax",                returns:["2550Q"] },
-  IT:  { title:"Income Tax",                     returns:["1702Q","1702"] }
+  WTC:  { title:"Withholding Tax — Compensation", returns:["1601C"] },
+  EWT:  { title:"Withholding Tax — Expanded",     returns:["0619E","1601EQ"] },
+  FWT:  { title:"Withholding Tax — Final",        returns:["0619F","1601FQ"] },
+  WVAT: { title:"Withholding VAT",                returns:["1600VT"] },
+  VAT:  { title:"Value-Added Tax",                returns:["2550Q"] },
+  DST:  { title:"Documentary Stamp Tax",          returns:["2000"] },
+  FBT:  { title:"Fringe Benefits Tax",            returns:["1603Q"] },
+  IT:   { title:"Income Tax",                     returns:["1702Q","1702"] }
 };
 
 // period objects: monthly {y,m} · quarterly {y,q} · annual {y}
@@ -861,6 +882,8 @@ function deadlineFor(ret, client, p){
   const R = RETURNS[ret];
   if(R.freq==="M"){
     const f = p.m===12 ? {y:p.y+1,m:1} : {y:p.y,m:p.m+1};
+    if(ret==="2000")   return { file:{...f,d:5},  pay:{...f,d:5}  };  // DST: 5th following month
+    if(ret==="1600VT") return { file:{...f,d:10}, pay:{...f,d:10} };  // WVAT: 10th following month
     if(p.m===12) return { file:{...f,d:15}, pay:{...f,d:15} };  // Dec comp: Jan 15
     if(client.channel==="eFPS"){
       const d = EFPS_DAYS[client.efpsGroup] || 15;
@@ -870,7 +893,7 @@ function deadlineFor(ret, client, p){
   }
   if(R.freq==="Q"){
     const endM = p.q*3, endD = lastDayOf(p.y, endM);
-    if(ret==="1601EQ"){
+    if(ret==="1601EQ" || ret==="1601FQ" || ret==="1603Q"){
       const f = endM===12 ? {y:p.y+1,m:1} : {y:p.y,m:endM+1};
       const d = lastDayOf(f.y, f.m);
       return { file:{...f,d}, pay:{...f,d} };  // last day of month following quarter
@@ -1148,7 +1171,7 @@ function renderDashboard(){
     const dueLine = nClients === 0 ? ""
       : `<span class="rc-due ${dueCls}">${CAL} Due ${fmtYmd(gDL)}${duePill}</span>`;
 
-    const efpsNote = (ret==="1601C"||ret==="0619E")
+    const efpsNote = (ret==="1601C"||ret==="0619E"||ret==="0619F")
       ? `<div class="rc-note">${INFO} EFPS staggered deadlines</div>` : "";
 
     // body: empty state (item 4) or progress bar + stat row
@@ -1238,7 +1261,7 @@ function renderMasterlist(){
       <td><div class="cname" onclick="openClient('${c.id}')">${escapeHtml(c.name)}</div>
           <div class="cmeta">TIN ${escapeHtml(c.tin||"—")} · RDO ${escapeHtml(c.rdo||"—")}${c.address?"<br>"+escapeHtml(c.address):""}</div></td>
       <td><span class="chan ${c.channel==="eFPS"?"efps":"ebir"}">${escapeHtml(c.channel||"")}</span></td>
-      <td>${["WTC","EWT","VAT","IT"].filter(t=>c.taxTypes&&c.taxTypes[t]).map(t=>`<span class="taxtag">${t}</span>`).join("")||"—"}</td>
+      <td>${Object.keys(TAX_PAGES).filter(t=>c.taxTypes&&c.taxTypes[t]).map(t=>`<span class="taxtag">${t}</span>`).join("")||"—"}</td>
       <td>${escapeHtml(c.preparer||"—")}<div class="cmeta">${c.reviewer?("Rev: "+escapeHtml(c.reviewer)):""}</div></td>
       <td>${escapeHtml(c.notes||"")}</td>
     </tr>`).join("");
@@ -1450,7 +1473,7 @@ window.openClient = function(id){
   $("fRev").value = c.reviewer || "";
   $("fNotes").value = c.notes || "";
   const tt = c.taxTypes || {};
-  ["WTC","EWT","VAT","IT"].forEach(t=> setTaxChip(t, !!tt[t]));
+  Object.keys(TAX_PAGES).forEach(t=> setTaxChip(t, !!tt[t]));
   // sensible default for new clients created from a tax page
   if(!id && TAX_PAGES[view]) setTaxChip(view, true);
   resetModalPosition("clientOverlay");
@@ -1519,7 +1542,7 @@ $("btnSaveClient").onclick = ()=>{
     address:$("fAddr").value.trim(),
     channel:getChan(),
     preparer:$("fPrep").value.trim(), reviewer:$("fRev").value.trim(), notes:$("fNotes").value.trim(),
-    taxTypes:{ WTC:taxChipOn("WTC"), EWT:taxChipOn("EWT"), VAT:taxChipOn("VAT"), IT:taxChipOn("IT") }
+    taxTypes: Object.fromEntries(Object.keys(TAX_PAGES).map(t=>[t, taxChipOn(t)]))
   };
   if(editingClientId){
     Object.assign(db.clients.find(x=>x.id===editingClientId), data);
