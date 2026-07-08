@@ -104,6 +104,20 @@
     font-size:.76rem; font-weight:700; color:var(--accent-deep); background:var(--accent-soft);
     padding:4px 12px; border-radius:999px; letter-spacing:.04em;
   }
+  .sync-chip{
+    display:none; align-items:center; gap:6px;
+    font-size:.72rem; font-weight:600; color:var(--muted);
+    padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+    white-space:nowrap; user-select:none;
+  }
+  .sync-chip .dot{ width:8px; height:8px; border-radius:50%; background:#9aa0a6; flex:0 0 auto; }
+  .sync-chip.online  .dot{ background:#1f9d55; box-shadow:0 0 0 3px rgba(31,157,85,.15); }
+  .sync-chip.online  { color:#1f7a45; }
+  .sync-chip.syncing .dot{ background:#d98a00; animation:syncPulse 1s ease-in-out infinite; }
+  .sync-chip.syncing { color:#a86a00; }
+  .sync-chip.offline .dot{ background:#d1453b; }
+  .sync-chip.offline { color:#b23a30; }
+  @keyframes syncPulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
   .pst-clock{font-size:.85rem; color:var(--muted); white-space:nowrap;}
   .pst-clock b{color:var(--ink-soft); font-weight:600;}
   .logout-btn{
@@ -381,6 +395,7 @@
       <span class="app">Tax Compliance System</span>
     </div>
     <span class="cluster-chip" id="clusterChip"></span>
+    <span class="sync-chip" id="syncChip" title="Realtime sync status"><span class="dot"></span><span class="txt">Offline</span></span>
     <div class="spacer"></div>
     <div class="pst-clock" id="pstClock"></div>
     <button class="logout-btn" id="btnLogout">Log out</button>
@@ -616,7 +631,41 @@ function loadDb(){
     }
   });
 }
-function save(){ store.set(dbKey(), JSON.stringify(db)); }
+function save(){
+  const payload = JSON.stringify(db);
+  store.set(dbKey(), payload);
+  // push to realtime backend (no-op until Firebase is ready)
+  if(cluster && window.fbApi) window.fbApi.push(cluster, payload);
+}
+
+/* ---- Realtime sync glue (used by the Firebase module below) ---- */
+let pendingRemote = false;
+function applyRemote(payloadString){
+  let incoming;
+  try { incoming = JSON.parse(payloadString); } catch(e){ return; }
+  if(!incoming || typeof incoming !== "object") return;
+  if(JSON.stringify(db) === payloadString) return;   // no change vs. local
+  db = incoming;
+  if(!db.clients) db.clients = [];
+  if(!db.records) db.records = {};
+  db.clients.forEach(c=>{
+    if(c.taxTypes && "WTE" in c.taxTypes){
+      c.taxTypes.EWT = c.taxTypes.EWT || c.taxTypes.WTE;
+      delete c.taxTypes.WTE;
+    }
+  });
+  store.set(dbKey(), JSON.stringify(db));   // cache only — do NOT push back
+  // don't yank the UI out from under an open modal; refresh when it closes
+  if(document.querySelector(".overlay.open")){ pendingRemote = true; return; }
+  if(cluster) render();
+}
+function startSync(){
+  if(cluster && window.fbApi){
+    window.fbApi.subscribe(cluster, applyRemote, ()=> JSON.stringify(db));
+  }
+}
+// if Firebase finishes loading after we're already signed in (session restore)
+window.addEventListener("firebase-ready", startSync);
 
 /* ============================================================
    Return definitions & deadline logic
@@ -810,9 +859,11 @@ function enterApp(cl){
   $("loginPw").value = "";
   view = "dashboard";
   render();
+  startSync();
 }
 $("btnLogout").onclick = ()=>{
   session.del("msma_cluster");
+  if(window.fbApi) window.fbApi.unsubscribe();
   cluster = null; db = null;
   $("appScreen").style.display = "none";
   $("loginScreen").style.display = "flex";
@@ -1341,7 +1392,10 @@ document.querySelectorAll(".overlay").forEach(o=>{
   o.addEventListener("mousedown", e=>{ if(e.target===o) o.classList.remove("open"); });
 });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeOverlays(); });
-function closeOverlays(){ document.querySelectorAll(".overlay").forEach(o=>o.classList.remove("open")); }
+function closeOverlays(){
+  document.querySelectorAll(".overlay").forEach(o=>o.classList.remove("open"));
+  if(pendingRemote){ pendingRemote = false; if(cluster) render(); }
+}
 
 let toastTimer;
 function toast(msg){
@@ -1364,6 +1418,76 @@ tickClock(); setInterval(tickClock, 30000);
   const saved = session.get("msma_cluster");
   if(saved && CLUSTER_HASHES[saved]) enterApp(saved);
 })();
+</script>
+
+<!-- ============================================================
+     Realtime sync backend (Firebase Firestore)
+     Each cluster workspace syncs to workspaces/{RPM|ADS|VCM}
+     as a single JSON payload. localStorage stays as the cache.
+============================================================ -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, onSnapshot, setDoc, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBmtq8PLArySq5EkUIVQA-GD8XBhO_Wurc",
+    authDomain: "msma-tax-comliance-system.firebaseapp.com",
+    databaseURL: "https://msma-tax-comliance-system-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "msma-tax-comliance-system",
+    storageBucket: "msma-tax-comliance-system.firebasestorage.app",
+    messagingSenderId: "454507910422",
+    appId: "1:454507910422:web:5a0a5f409be4dea4adac37",
+    measurementId: "G-T3R2KDESNR"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const fs  = getFirestore(app);
+
+  const chip = document.getElementById("syncChip");
+  function setStatus(state){            // 'syncing' | 'online' | 'offline' | 'hidden'
+    if(!chip) return;
+    if(state === "hidden"){ chip.style.display = "none"; return; }
+    chip.style.display = "inline-flex";
+    chip.classList.remove("online","syncing","offline");
+    chip.classList.add(state);
+    chip.querySelector(".txt").textContent =
+      state === "online" ? "Synced" : state === "syncing" ? "Syncing…" : "Offline";
+  }
+
+  window.fbApi = {
+    _unsub: null,
+    subscribe(cluster, onRemote, seedFn){
+      this.unsubscribe();
+      setStatus("syncing");
+      const ref = doc(fs, "workspaces", cluster);
+      this._unsub = onSnapshot(ref, snap => {
+        if(snap.metadata.hasPendingWrites) return;          // ignore our own write echo
+        setStatus(snap.metadata.fromCache ? "syncing" : "online");
+        if(!snap.exists()){                                 // first run: seed cloud from local
+          const seed = seedFn && seedFn();
+          if(seed) this.push(cluster, seed);
+          return;
+        }
+        const data = snap.data();
+        if(data && typeof data.payload === "string") onRemote(data.payload);
+      }, err => { console.error("[sync] listen error:", err); setStatus("offline"); });
+    },
+    push(cluster, payloadString){
+      setStatus("syncing");
+      setDoc(doc(fs, "workspaces", cluster),
+             { payload: payloadString, updatedAt: serverTimestamp() })
+        .then(()  => setStatus("online"))
+        .catch(err => { console.error("[sync] push error:", err); setStatus("offline"); });
+    },
+    unsubscribe(){
+      if(this._unsub){ this._unsub(); this._unsub = null; }
+      setStatus("hidden");
+    }
+  };
+
+  // let the main script know the backend is live (handles session-restore case)
+  window.dispatchEvent(new Event("firebase-ready"));
 </script>
 </body>
 </html>
