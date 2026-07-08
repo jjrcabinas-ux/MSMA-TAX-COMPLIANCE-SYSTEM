@@ -13,7 +13,7 @@
     --red:#b91c1c; --red-bg:#fdecec;
     --green:#15803d; --green-bg:#e9f6ee;
     --blue:#1d4ed8; --blue-bg:#e9effc;
-    --brand-dark:#1a1b1f; --brand-lime:#b7d94a;
+    --brand-dark:#1a1b1f; --brand-lime:#bed72a;
     --radius:10px;
     --sidebar-w:248px; --sidebar-w-min:64px;
     font-size:15px;
@@ -57,6 +57,8 @@
   }
   .login-card{ width:100%; max-width:376px; }
   .login-card h1{font-size:2.15rem; font-weight:800; line-height:1.12; letter-spacing:-.2px;}
+  .login-card h1 .th-a{color:#002060;}
+  .login-card h1 .th-b{color:var(--brand-lime);}
   .login-card .tag{color:var(--muted); font-size:.92rem; margin:10px 0 28px;}
   .cluster-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px;}
   .cluster-opt{
@@ -400,7 +402,7 @@
 
   <div class="login-panel">
     <div class="login-card">
-      <h1>Tax Compliance System</h1>
+      <h1><span class="th-a">Tax Compliance</span> <span class="th-b">System</span></h1>
       <div class="tag">Select your cluster to continue</div>
       <div class="login-err" id="loginErr"></div>
       <div class="cluster-grid" id="clusterGrid">
