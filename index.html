@@ -304,40 +304,32 @@
   .modal{background:var(--surface); border-radius:14px; width:100%; max-width:640px; box-shadow:0 18px 50px rgba(15,25,35,.25);}
   .modal header{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line); cursor:move; user-select:none;}
   .modal header h2{font-size:1.05rem;}
-  /* dropdown checklist */
-  .dd{position:relative;}
-  .dd-btn{
-    width:100%; text-align:left; padding:8px 34px 8px 11px; border:1px solid var(--line);
-    border-radius:8px; background:#fff; color:var(--ink); position:relative;
+  /* applicable tax-type chips */
+  .tax-chips{display:flex; gap:8px; flex-wrap:wrap; padding-top:1px;}
+  .tax-chip{
+    border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+    font-weight:700; font-size:.82rem; letter-spacing:.02em; padding:8px 16px;
+    border-radius:8px; transition:background .15s, border-color .15s, color .15s;
   }
-  .dd-btn:focus{border-color:var(--accent); outline:none;}
-  .dd-btn.placeholder{color:var(--muted);}
-  .dd-btn::after{
-    content:""; position:absolute; right:12px; top:50%; width:8px; height:8px;
-    border-right:2px solid var(--muted); border-bottom:2px solid var(--muted);
-    transform:translateY(-70%) rotate(45deg); transition:transform .2s ease;
-  }
-  .dd.open .dd-btn::after{transform:translateY(-30%) rotate(-135deg);}
-  .dd-panel{
-    position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:10;
-    background:#fff; border:1px solid var(--line); border-radius:10px;
-    box-shadow:0 10px 26px rgba(15,25,35,.14); padding:6px;
-    overflow:hidden; max-height:0; opacity:0; pointer-events:none;
-    transition:max-height .5s ease, opacity .2s ease;
-  }
-  .dd.open .dd-panel{max-height:220px; opacity:1; pointer-events:auto;}
-  .dd-panel label{
-    display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:7px;
-    font-size:.88rem; font-weight:500; color:var(--ink-soft); cursor:pointer; margin:0;
-  }
-  .dd-panel label:hover{background:var(--paper);}
-  .modal .body{padding:18px 20px; display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .tax-chip:hover{border-color:var(--accent); color:var(--accent-deep);}
+  .tax-chip.selected{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-deep);}
+  .tax-chip.selected::before{content:"\2713\00a0"; font-weight:800;}
+  .modal .body{padding:20px 22px; display:grid; grid-template-columns:1fr 1fr; gap:15px 16px;}
   .modal .body .full{grid-column:1/-1;}
-  .field label{display:block; font-size:.78rem; font-weight:600; color:var(--ink-soft); margin-bottom:5px;}
+  .field label{display:block; font-size:.78rem; font-weight:600; color:var(--ink-soft); margin-bottom:6px;}
   .field input,.field select,.field textarea{
-    width:100%; padding:8px 11px; border:1px solid var(--line); border-radius:8px; outline:none; background:#fff;
+    width:100%; padding:9px 12px; border:1px solid var(--line); border-radius:8px;
+    outline:none; background:#fff; color:var(--ink); transition:border-color .15s, box-shadow .15s;
   }
-  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);}
+  .field select{
+    appearance:none; -webkit-appearance:none; cursor:pointer; padding-right:34px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a8794' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 12px center;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{
+    border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);
+  }
+  .field input::placeholder,.field textarea::placeholder{color:#aab4bf;}
   .checks{display:flex; gap:14px; flex-wrap:wrap; padding-top:4px;}
   .cor-note{
     display:flex; gap:8px; align-items:flex-start;
@@ -465,9 +457,13 @@
         <label>Registered name</label>
         <input id="fName" placeholder="e.g. ABC Trading Corp.">
       </div>
+      <div class="field full">
+        <label>Registered business address</label>
+        <input id="fAddr" placeholder="As shown on the 2303">
+      </div>
       <div class="field">
         <label>TIN</label>
-        <input id="fTin" placeholder="000-000-000-000">
+        <input id="fTin" inputmode="numeric" maxlength="15" placeholder="000-000-000-000">
       </div>
       <div class="field">
         <label>RDO code</label>
@@ -476,45 +472,26 @@
       <div class="field">
         <label>Filing channel</label>
         <select id="fChan">
-          <option value="eBIRForms">eBIRForms</option>
-          <option value="EFPS">EFPS</option>
+          <option value="eBIR">eBIR</option>
+          <option value="eFPS">eFPS</option>
         </select>
-      </div>
-      <div class="field">
-        <label>EFPS group</label>
-        <select id="fGroup">
-          <option value="">N/A</option>
-          <option value="A">Group A (file by 15th)</option>
-          <option value="B">Group B (file by 14th)</option>
-          <option value="C">Group C (file by 13th)</option>
-          <option value="D">Group D (file by 12th)</option>
-          <option value="E">Group E (file by 11th)</option>
-        </select>
-        <div class="hint">Staggered filing applies to EFPS monthly withholding returns. Payment due the 15th.</div>
       </div>
       <div class="field">
         <label>Applicable tax types</label>
-        <div class="dd" id="taxDd">
-          <button type="button" class="dd-btn placeholder" id="taxDdBtn">Select tax types</button>
-          <div class="dd-panel">
-            <label><input type="checkbox" id="txWTC"> WTC</label>
-            <label><input type="checkbox" id="txEWT"> EWT</label>
-            <label><input type="checkbox" id="txVAT"> VAT</label>
-            <label><input type="checkbox" id="txIT"> IT</label>
-          </div>
+        <div class="tax-chips" id="taxChips">
+          <button type="button" class="tax-chip" data-tax="WTC">WTC</button>
+          <button type="button" class="tax-chip" data-tax="EWT">EWT</button>
+          <button type="button" class="tax-chip" data-tax="VAT">VAT</button>
+          <button type="button" class="tax-chip" data-tax="IT">IT</button>
         </div>
       </div>
       <div class="field">
-        <label>Registered business address</label>
-        <input id="fAddr" placeholder="As shown on the 2303">
-      </div>
-      <div class="field">
-        <label>Associate in charge</label>
+        <label>Junior Associate In-charge</label>
         <input id="fPrep" placeholder="Staff name">
       </div>
       <div class="field">
-        <label>Reviewer/Senior associate in charge</label>
-        <input id="fRev" placeholder="Senior / manager">
+        <label>Senior Associate in-charge/Team Leader</label>
+        <input id="fRev" placeholder="Senior / team leader">
       </div>
       <div class="field full">
         <label>Notes</label>
@@ -757,7 +734,7 @@ function deadlineFor(ret, client, p){
   if(R.freq==="M"){
     const f = p.m===12 ? {y:p.y+1,m:1} : {y:p.y,m:p.m+1};
     if(p.m===12) return { file:{...f,d:15}, pay:{...f,d:15} };  // Dec comp: Jan 15
-    if(client.channel==="EFPS"){
+    if(client.channel==="eFPS"){
       const d = EFPS_DAYS[client.efpsGroup] || 15;
       return { file:{...f,d}, pay:{...f,d:15} };
     }
@@ -956,7 +933,7 @@ function renderDashboard(){
     const R = RETURNS[ret];
     const { p, s } = summarize(ret);
     const pct = s.total ? Math.round(100*s.filed/s.total) : 0;
-    const gDL = deadlineFor(ret, {channel:"eBIRForms"}, p).file;
+    const gDL = deadlineFor(ret, {channel:"eBIR"}, p).file;
     const dleft = daysBetween(todayInt(), gDL);
     const dueCls = dleft < 0 ? "overdue" : dleft <= 10 ? "soon" : "";
     const statusCls = s.red > 0 ? "alert" : s.amber > 0 ? "warn" : "ontrack";
@@ -1040,7 +1017,7 @@ function renderMasterlist(){
     <tr>
       <td><div class="cname" onclick="openClient('${c.id}')">${escapeHtml(c.name)}</div>
           <div class="cmeta">TIN ${escapeHtml(c.tin||"—")} · RDO ${escapeHtml(c.rdo||"—")}${c.address?"<br>"+escapeHtml(c.address):""}</div></td>
-      <td><span class="chan ${c.channel==="EFPS"?"efps":"ebir"}">${c.channel}${c.channel==="EFPS"&&c.efpsGroup?" · "+c.efpsGroup:""}</span></td>
+      <td><span class="chan ${c.channel==="eFPS"?"efps":"ebir"}">${escapeHtml(c.channel||"")}</span></td>
       <td>${["WTC","EWT","VAT","IT"].filter(t=>c.taxTypes&&c.taxTypes[t]).map(t=>`<span class="taxtag">${t}</span>`).join("")||"—"}</td>
       <td>${escapeHtml(c.preparer||"—")}<div class="cmeta">${c.reviewer?("Rev: "+escapeHtml(c.reviewer)):""}</div></td>
       <td>${escapeHtml(c.notes||"")}</td>
@@ -1055,8 +1032,8 @@ function renderMasterlist(){
       <input type="search" id="search" placeholder="Search client, TIN, or staff…" value="${escapeHtml(searchQ)}">
       <select id="filterChan">
         <option value="">All channels</option>
-        <option value="eBIRForms" ${filterChan==="eBIRForms"?"selected":""}>eBIRForms</option>
-        <option value="EFPS" ${filterChan==="EFPS"?"selected":""}>EFPS</option>
+        <option value="eBIR" ${filterChan==="eBIR"?"selected":""}>eBIR</option>
+        <option value="eFPS" ${filterChan==="eFPS"?"selected":""}>eFPS</option>
       </select>
       <button class="btn" id="btnAddClient">+ Add client</button>
     </div>
@@ -1118,7 +1095,7 @@ function renderTaxPage(taxType){
           <div class="cname" onclick="openClient('${c.id}')">${escapeHtml(c.name)}</div>
           <div class="cmeta">${escapeHtml(c.tin||"—")} · ${escapeHtml(c.preparer||"unassigned")}${c.reviewer?" / "+escapeHtml(c.reviewer):""}</div>
         </td>
-        <td><span class="chan ${c.channel==="EFPS"?"efps":"ebir"}">${c.channel}${c.channel==="EFPS"&&c.efpsGroup?" · "+c.efpsGroup:""}</span></td>
+        <td><span class="chan ${c.channel==="eFPS"?"efps":"ebir"}">${escapeHtml(c.channel||"")}</span></td>
         <td class="due">File: <b>${fmtYmd(dl.file)}</b><br><span class="cmeta">Pay: ${fmtYmd(dl.pay)}</span></td>
         <td>
           <div style="display:flex; align-items:center;">
@@ -1166,8 +1143,8 @@ function renderTaxPage(taxType){
       </select>
       <select id="filterChan">
         <option value="">All channels</option>
-        <option value="eBIRForms" ${filterChan==="eBIRForms"?"selected":""}>eBIRForms</option>
-        <option value="EFPS" ${filterChan==="EFPS"?"selected":""}>EFPS</option>
+        <option value="eBIR" ${filterChan==="eBIR"?"selected":""}>eBIR</option>
+        <option value="eFPS" ${filterChan==="eFPS"?"selected":""}>eFPS</option>
       </select>
       <button class="btn" id="btnAddClient">+ Add client</button>
     </div>
@@ -1243,43 +1220,32 @@ window.openClient = function(id){
   $("fTin").value = c.tin || "";
   $("fRdo").value = c.rdo || "";
   $("fAddr").value = c.address || "";
-  $("fChan").value = c.channel || "eBIRForms";
-  $("fGroup").value = c.efpsGroup || "";
+  $("fChan").value = c.channel || "eBIR";
   $("fPrep").value = c.preparer || "";
   $("fRev").value = c.reviewer || "";
   $("fNotes").value = c.notes || "";
   const tt = c.taxTypes || {};
-  $("txWTC").checked = !!tt.WTC;
-  $("txEWT").checked = !!tt.EWT;
-  $("txVAT").checked = !!tt.VAT;
-  $("txIT").checked = !!tt.IT;
+  ["WTC","EWT","VAT","IT"].forEach(t=> setTaxChip(t, !!tt[t]));
   // sensible default for new clients created from a tax page
-  if(!id && TAX_PAGES[view]) $("tx"+view).checked = true;
-  updateTaxDdLabel();
-  $("taxDd").classList.remove("open");
+  if(!id && TAX_PAGES[view]) setTaxChip(view, true);
   resetModalPosition("clientOverlay");
   $("btnDeleteClient").style.display = id ? "inline" : "none";
   $("clientOverlay").classList.add("open");
   $("fName").focus();
 };
 
-/* ---- Applicable tax types dropdown checklist ---- */
-function updateTaxDdLabel(){
-  const sel = ["WTC","EWT","VAT","IT"].filter(t=>$("tx"+t).checked);
-  const btn = $("taxDdBtn");
-  if(sel.length){ btn.textContent = sel.join(", "); btn.classList.remove("placeholder"); }
-  else { btn.textContent = "Select tax types"; btn.classList.add("placeholder"); }
-}
-$("taxDdBtn").onclick = e=>{
-  e.stopPropagation();
-  $("taxDd").classList.toggle("open");
-};
-document.querySelectorAll("#taxDd .dd-panel input").forEach(cb=>{
-  cb.addEventListener("change", updateTaxDdLabel);
+/* ---- Applicable tax-type chips ---- */
+function taxChip(t){ return document.querySelector(`#taxChips .tax-chip[data-tax="${t}"]`); }
+function setTaxChip(t, on){ taxChip(t).classList.toggle("selected", !!on); }
+function taxChipOn(t){ return taxChip(t).classList.contains("selected"); }
+document.querySelectorAll("#taxChips .tax-chip").forEach(ch=>{
+  ch.onclick = ()=> ch.classList.toggle("selected");
 });
-document.addEventListener("click", e=>{
-  const dd = $("taxDd");
-  if(dd && dd.classList.contains("open") && !dd.contains(e.target)) dd.classList.remove("open");
+
+/* ---- TIN auto-format: group digits in threes (000-000-000-000) ---- */
+$("fTin").addEventListener("input", e=>{
+  const digits = e.target.value.replace(/\D/g, "").slice(0, 12);
+  e.target.value = digits.replace(/(\d{3})(?=\d)/g, "$1-");
 });
 
 /* ---- Draggable modals (grab the header and move) ---- */
@@ -1315,9 +1281,8 @@ $("btnSaveClient").onclick = ()=>{
     name, tin:$("fTin").value.trim(), rdo:$("fRdo").value.trim(),
     address:$("fAddr").value.trim(),
     channel:$("fChan").value,
-    efpsGroup:$("fChan").value==="EFPS" ? $("fGroup").value : "",
     preparer:$("fPrep").value.trim(), reviewer:$("fRev").value.trim(), notes:$("fNotes").value.trim(),
-    taxTypes:{ WTC:$("txWTC").checked, EWT:$("txEWT").checked, VAT:$("txVAT").checked, IT:$("txIT").checked }
+    taxTypes:{ WTC:taxChipOn("WTC"), EWT:taxChipOn("EWT"), VAT:taxChipOn("VAT"), IT:taxChipOn("IT") }
   };
   if(editingClientId){
     Object.assign(db.clients.find(x=>x.id===editingClientId), data);
