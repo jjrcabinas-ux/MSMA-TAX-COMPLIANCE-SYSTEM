@@ -369,6 +369,20 @@
   .attn-empty{flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:12px; text-align:center; padding:34px 26px; min-height:170px; color:var(--muted); font-size:.92rem;}
   .attn-check{width:40px; height:40px; color:#15803d; opacity:.75;}
+  .see-more{
+    display:block; width:100%; margin-top:4px; padding:10px;
+    border:none; border-top:1px solid var(--line); background:transparent;
+    font-size:.82rem; font-weight:700; color:var(--accent-deep); text-align:center;
+  }
+  .see-more:hover{background:var(--paper);}
+  .comp-card{margin-top:16px;}
+  .comp-card .cs-green{color:#15803d;}
+  .comp-card .cs-amber{color:#d97706;}
+  .comp-card .cs-red{color:#dc2626;}
+  .cs-done{display:flex; align-items:center; gap:8px; min-width:110px;}
+  .cs-done .cs-bar{flex:1; height:6px; border-radius:999px; background:var(--paper); overflow:hidden;}
+  .cs-done .cs-bar i{display:block; height:100%; background:var(--green);}
+  .cs-done span{font-size:.78rem; font-weight:700; min-width:32px; text-align:right;}
 
   /* =================== MODALS =================== */
   .overlay{
@@ -984,6 +998,7 @@ let recCtx = null;               // {ret, period, clientId}
 let editingClientId = null;
 let searchQ = "", filterFlag = "", filterChan = "";
 let dashScope = "all";           // Main Tracker period scope: "all" or a year string
+let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
 Object.keys(RETURNS).forEach(r => { periods[r] = validDefaultPeriod(r); });
@@ -1088,6 +1103,7 @@ document.querySelectorAll(".nav-item[data-view]").forEach(b=>{
   b.onclick = ()=>{
     view = b.dataset.view;
     searchQ = ""; filterFlag = ""; filterChan = "";
+    attnExpanded = false;   // collapse Needs-attention back to 10 when moving around
     if(TAX_PAGES[view] && !$("taxSubmenu").classList.contains("open")){
       $("taxParent").classList.add("open");
       $("taxSubmenu").classList.add("open");
@@ -1097,6 +1113,7 @@ document.querySelectorAll(".nav-item[data-view]").forEach(b=>{
 });
 window.gotoView = function(v, ret){
   view = v;
+  attnExpanded = false;
   if(ret) activeReturn[RETURNS[ret].tax] = ret;
   if(TAX_PAGES[v]){
     $("taxParent").classList.add("open");
@@ -1166,7 +1183,8 @@ function scopeYears(){
   return [...years].sort((a,b)=>b-a);
 }
 function scopeLabel(scope){ return scope === "all" ? "All periods" : "TY " + scope; }
-window.setDashScope = function(v){ dashScope = v; render(); };
+window.setDashScope = function(v){ dashScope = v; attnExpanded = false; render(); };
+window.toggleAttn = function(){ attnExpanded = !attnExpanded; render(); };
 function renderDashboard(){
   const t = nowPST();
   const scope = dashScope;
@@ -1243,10 +1261,16 @@ function renderDashboard(){
   });
 
   attRows.sort((a,b)=> a.f.rank - b.f.rank || ymdInt(a.dl.y,a.dl.m,a.dl.d) - ymdInt(b.dl.y,b.dl.m,b.dl.d));
+  const ATTN_LIMIT = 10;
+  const shownRows = attnExpanded ? attRows : attRows.slice(0, ATTN_LIMIT);
+  const hiddenCount = attRows.length - ATTN_LIMIT;
+  const seeMoreBtn = attRows.length > ATTN_LIMIT
+    ? `<button class="see-more" onclick="toggleAttn()">${attnExpanded ? "Show less ▲" : `See ${hiddenCount} more ▼`}</button>`
+    : "";
   const attnBody = attRows.length
     ? `<table>
         <thead><tr><th>Client</th><th>Return</th><th>Deadline</th><th>Last step done</th><th>Flag</th></tr></thead>
-        <tbody>${attRows.map(r=>`
+        <tbody>${shownRows.map(r=>`
           <tr>
             <td><div class="cname" onclick="gotoView('${RETURNS[r.ret].tax}','${r.ret}')">${escapeHtml(r.c.name)}</div>
                 <div class="cmeta">${escapeHtml(r.c.preparer||"unassigned")}</div></td>
@@ -1255,11 +1279,53 @@ function renderDashboard(){
             <td>${escapeHtml(r.stageWord)}</td>
             <td><span class="flagchip ${r.f.cls}">${r.f.text}</span></td>
           </tr>`).join("")}</tbody>
-      </table>`
+      </table>${seeMoreBtn}`
     : `<div class="attn-empty">
         <svg class="attn-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
         <div>Nothing needs attention in this period. <b>All tracked returns are on track.</b></div>
       </div>`;
+
+  // ---- Company summary (per client, within the selected scope) ----
+  const compMap = {};
+  Object.keys(RETURNS).forEach(ret=>{
+    const prefix = ret + "|";
+    Object.keys(db.records).forEach(k=>{
+      if(!k.startsWith(prefix)) return;
+      const p = parsePeriodKey(ret, k.slice(prefix.length));
+      if(scope !== "all" && String(p.y) !== String(scope)) return;
+      Object.keys(db.records[k]).forEach(cid=>{
+        const client = db.clients.find(c=>c.id===cid);
+        if(!client || !(client.taxTypes && client.taxTypes[RETURNS[ret].tax])) return;
+        const rec = db.records[k][cid];
+        const f = flagFor(ret, client, p, rec);
+        const e = compMap[cid] || (compMap[cid] = { c:client, total:0, filed:0, prog:0, amber:0, red:0 });
+        e.total++;
+        if(rec.stage>=6) e.filed++; else e.prog++;
+        if(f.cls==="amber") e.amber++;
+        if(f.cls==="red") e.red++;
+      });
+    });
+  });
+  db.clients.forEach(c=>{ if(!compMap[c.id]) compMap[c.id] = { c, total:0, filed:0, prog:0, amber:0, red:0 }; });
+  const compRows = Object.values(compMap).sort((a,b)=>a.c.name.localeCompare(b.c.name));
+  const compBody = compRows.length
+    ? `<table>
+        <thead><tr><th>Company</th><th>Filings</th><th>Filed</th><th>In progress</th><th>Follow-up</th><th>At risk</th><th>Done</th></tr></thead>
+        <tbody>${compRows.map(e=>{
+          const pctC = e.total ? Math.round(100*e.filed/e.total) : 0;
+          return `
+          <tr>
+            <td><div class="cname" onclick="openClient('${e.c.id}')">${escapeHtml(e.c.name)}</div>
+                <div class="cmeta">${escapeHtml(e.c.preparer||"unassigned")}</div></td>
+            <td>${e.total || "—"}</td>
+            <td><b class="cs-green">${e.filed}</b></td>
+            <td><b>${e.prog}</b></td>
+            <td><b class="cs-amber">${e.amber}</b></td>
+            <td><b class="cs-red">${e.red}</b></td>
+            <td>${e.total ? `<div class="cs-done"><div class="cs-bar"><i style="width:${pctC}%"></i></div><span>${pctC}%</span></div>` : `<span class="cmeta">no records</span>`}</td>
+          </tr>`;}).join("")}</tbody>
+      </table>`
+    : `<div class="attn-empty" style="min-height:110px;"><div>No companies yet — add clients in the <b>Client Masterlist</b>.</div></div>`;
 
   return `
     <div class="dash">
@@ -1277,6 +1343,10 @@ function renderDashboard(){
       <div class="card attn-card">
         <div class="card-title">Needs attention <span class="pill">${attRows.length}</span></div>
         <div class="attn-body">${attnBody}</div>
+      </div>
+      <div class="card comp-card">
+        <div class="card-title">Company summary <span class="pill">${compRows.length}</span></div>
+        ${compBody}
       </div>
       <p class="storage-note">Cluster data is stored in this browser (localStorage) under the ${cluster} workspace. All dates are pinned to Philippine Standard Time.</p>
     </div>`;
