@@ -203,6 +203,13 @@
   .page-head{display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-bottom:18px;}
   .page-head h1{font-size:1.35rem; font-weight:700; letter-spacing:.2px;}
   .page-head .sub{color:var(--muted); font-size:.9rem; width:100%;}
+  .scope-select{margin-left:auto; display:inline-flex; align-items:center; gap:8px; font-size:.78rem; font-weight:600; color:var(--muted);}
+  .scope-select select{
+    padding:8px 12px; border:1.5px solid var(--line); border-radius:8px; background:var(--surface);
+    font-size:.85rem; font-weight:700; color:var(--ink); cursor:pointer; outline:none;
+  }
+  .scope-select select:hover{border-color:var(--accent);}
+  .scope-select select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
   .period-nav{display:flex; align-items:center; gap:6px; margin-left:auto;}
   .period-nav button{
     border:1px solid var(--line); background:var(--surface); border-radius:8px;
@@ -751,6 +758,13 @@ function periodKey(ret, p){
   if(f==="Q") return `${p.y}-Q${p.q}`;
   return `${p.y}`;
 }
+// reverse of periodKey → period object {y,m} | {y,q} | {y}
+function parsePeriodKey(ret, pk){
+  const f = RETURNS[ret].freq;
+  if(f==="M"){ const [y,m] = pk.split("-"); return { y:+y, m:+m }; }
+  if(f==="Q"){ const [y,q] = pk.split("-Q"); return { y:+y, q:+q }; }
+  return { y:+pk };
+}
 function periodLabel(ret, p){
   const f = RETURNS[ret].freq;
   if(f==="M") return `${MONTHS[p.m-1]} ${p.y}`;
@@ -848,6 +862,7 @@ let periods = {};                // per return key: current period
 let recCtx = null;               // {ret, period, clientId}
 let editingClientId = null;
 let searchQ = "", filterFlag = "", filterChan = "";
+let dashScope = "all";           // Main Tracker period scope: "all" or a year string
 
 Object.keys(RETURNS).forEach(r => periods[r] = defaultPeriod(r));
 Object.keys(TAX_PAGES).forEach(t => activeReturn[t] = TAX_PAGES[t].returns[0]);
@@ -983,35 +998,68 @@ function render(){
 }
 
 /* -------------------- Dashboard -------------------- */
-function summarize(ret){
+// Aggregate every tracked filing for a return within the scope.
+// scope: "all" (every period) or a year string (that year only).
+// Returns per-record rows too, for the "Needs attention" list.
+function summarize(ret, scope){
   const R = RETURNS[ret];
-  const p = defaultPeriod(ret);
-  const list = clientsFor(R.tax);
-  const s = { total:list.length, filed:0, prog:0, amber:0, red:0, notStarted:0 };
-  list.forEach(c=>{
-    const rec = getRecord(ret, p, c.id);
-    const f = flagFor(ret, c, p, rec);
-    if(rec.stage>=6) s.filed++;
-    else { s.prog++; if(rec.stage===0) s.notStarted++; }
-    if(f.cls==="amber") s.amber++;
-    if(f.cls==="red") s.red++;
+  const s = { total:0, filed:0, prog:0, amber:0, red:0, notStarted:0, periods:0 };
+  const rows = [];
+  const prefix = ret + "|";
+  Object.keys(db.records).forEach(k=>{
+    if(!k.startsWith(prefix)) return;
+    const p = parsePeriodKey(ret, k.slice(prefix.length));
+    if(scope !== "all" && String(p.y) !== String(scope)) return;
+    const recs = db.records[k];
+    let any = false;
+    Object.keys(recs).forEach(cid=>{
+      const client = db.clients.find(c=>c.id===cid);
+      if(!client || !(client.taxTypes && client.taxTypes[R.tax])) return; // orphan/unregistered
+      const rec = recs[cid];
+      const f = flagFor(ret, client, p, rec);
+      s.total++;
+      if(rec.stage>=6) s.filed++;
+      else { s.prog++; if(rec.stage===0) s.notStarted++; }
+      if(f.cls==="amber") s.amber++;
+      if(f.cls==="red") s.red++;
+      if(f.cls==="red" || f.cls==="amber"){
+        rows.push({ f, c:client, ret, p, dl: deadlineFor(ret, client, p).file,
+          stageWord: rec.stage===0 ? "Not started" : STEPS[rec.stage-1].label });
+      }
+      any = true;
+    });
+    if(any) s.periods++;
   });
-  return { p, s };
+  return { s, rows };
 }
+// Distinct years present in the records (+ current year), newest first.
+function scopeYears(){
+  const years = new Set([ nowPST().y ]);
+  Object.keys(db.records).forEach(k=>{
+    const pk = k.split("|")[1];
+    const y = pk ? parseInt(pk.slice(0,4)) : NaN;
+    if(y) years.add(y);
+  });
+  return [...years].sort((a,b)=>b-a);
+}
+function scopeLabel(scope){ return scope === "all" ? "All periods" : "TY " + scope; }
+window.setDashScope = function(v){ dashScope = v; render(); };
 function renderDashboard(){
   const t = nowPST();
+  const scope = dashScope;
+  const years = scopeYears();
   let cards = "", attention = "";
   let attRows = [];
-  const CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  const LAYERS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>';
 
   Object.keys(RETURNS).forEach(ret=>{
     const R = RETURNS[ret];
-    const { p, s } = summarize(ret);
+    const { s, rows } = summarize(ret, scope);
     const pct = s.total ? Math.round(100*s.filed/s.total) : 0;
-    const gDL = deadlineFor(ret, {channel:"eBIR"}, p).file;
-    const dleft = daysBetween(todayInt(), gDL);
-    const dueCls = dleft < 0 ? "overdue" : dleft <= 10 ? "soon" : "";
     const statusCls = s.red > 0 ? "alert" : s.amber > 0 ? "warn" : "ontrack";
+    const countText = s.total > 0
+      ? `${s.total} filing${s.total===1?"":"s"}${s.periods>1?" · "+s.periods+" periods":""}`
+      : "No records yet";
     const efpsNote = (ret==="1601C"||ret==="0619E")
       ? `<div class="rc-note">EFPS staggered deadlines</div>` : "";
     cards += `
@@ -1021,8 +1069,8 @@ function renderDashboard(){
           <span class="rc-tax">${R.tax}</span>
         </div>
         <div class="rc-meta">
-          <span class="rc-cycle">${periodLabel(ret,p)}</span>
-          <span class="rc-due ${dueCls}">${CAL} Due ${fmtYmd(gDL)}</span>
+          <span class="rc-cycle">${scopeLabel(scope)}</span>
+          <span class="rc-due">${LAYERS} ${countText}</span>
         </div>
         <div class="rc-progress">
           <div class="rc-bar">
@@ -1041,15 +1089,7 @@ function renderDashboard(){
         ${efpsNote}
       </div>`;
 
-    // attention list rows
-    clientsFor(R.tax).forEach(c=>{
-      const rec = getRecord(ret, p, c.id);
-      const f = flagFor(ret, c, p, rec);
-      if(f.cls==="red" || f.cls==="amber"){
-        attRows.push({ f, c, ret, p, dl: deadlineFor(ret, c, p).file,
-          stageWord: rec.stage===0 ? "Not started" : STEPS[rec.stage-1].label });
-      }
-    });
+    attRows.push(...rows);
   });
 
   attRows.sort((a,b)=> a.f.rank - b.f.rank || ymdInt(a.dl.y,a.dl.m,a.dl.d) - ymdInt(b.dl.y,b.dl.m,b.dl.d));
@@ -1062,12 +1102,18 @@ function renderDashboard(){
       <td>${escapeHtml(r.stageWord)}</td>
       <td><span class="flagchip ${r.f.cls}">${r.f.text}</span></td>
     </tr>`).join("")
-    : `<tr><td colspan="5"><div class="empty" style="padding:26px;">Nothing needs attention right now. <b>All returns are on track.</b></div></td></tr>`;
+    : `<tr><td colspan="5"><div class="empty" style="padding:26px;">Nothing needs attention in this period. <b>All tracked returns are on track.</b></div></td></tr>`;
 
   return `
     <div class="page-head">
       <h1>Main Tracker</h1>
-      <div class="sub">Per-return compliance summary for the ${cluster} Cluster · current open cycles as of ${MONTHS[t.m-1]} ${t.d}, ${t.y} (PST)</div>
+      <label class="scope-select">Period
+        <select id="dashScope" onchange="setDashScope(this.value)">
+          <option value="all" ${scope==="all"?"selected":""}>All periods</option>
+          ${years.map(y=>`<option value="${y}" ${String(scope)===String(y)?"selected":""}>TY ${y}</option>`).join("")}
+        </select>
+      </label>
+      <div class="sub">Compliance summary for the ${cluster} Cluster · ${scopeLabel(scope)} · as of ${MONTHS[t.m-1]} ${t.d}, ${t.y} (PST)</div>
     </div>
     <div class="ret-grid">${cards}</div>
     <div class="card">
