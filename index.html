@@ -428,8 +428,22 @@
   }
   .cor-note b{font-weight:700;}
   .checks label{display:flex; align-items:center; gap:6px; font-size:.86rem; font-weight:500; color:var(--ink-soft); margin:0;}
-  .modal footer{display:flex; justify-content:space-between; gap:10px; padding:14px 20px; border-top:1px solid var(--line);}
+  .modal footer{display:flex; justify-content:space-between; gap:10px; padding:14px 20px; border-top:1px solid var(--line); flex-wrap:wrap;}
   .modal footer .right{display:flex; gap:10px; margin-left:auto;}
+  .modal footer .left{display:flex; gap:8px; flex-wrap:wrap;}
+  /* Data-request (RQ) modal */
+  .rq-q{font-size:.95rem; font-weight:600; color:var(--ink); margin-bottom:14px;}
+  .rq-opts{display:flex; flex-direction:column; gap:10px;}
+  .rq-opt{
+    text-align:left; border:1.5px solid var(--line); border-radius:12px; background:var(--surface);
+    padding:14px 16px; transition:border-color .15s, background .15s;
+  }
+  .rq-opt:hover{border-color:var(--accent); background:var(--accent-soft);}
+  .rq-opt b{display:block; font-size:.92rem; color:var(--ink); margin-bottom:3px;}
+  .rq-opt span{font-size:.78rem; color:var(--muted);}
+  .rq-hint{font-weight:500; color:var(--muted);}
+  #rqSubject{width:100%; font-weight:600;}
+  #rqBody{width:100%; font-size:.86rem; line-height:1.5;}
   .danger-link{background:none; border:none; color:var(--red); font-weight:600;}
   .xclose{border:none; background:transparent; font-size:1.2rem; color:var(--muted); width:32px; height:32px; border-radius:50%;}
   .xclose:hover{background:var(--paper);}
@@ -645,6 +659,59 @@
       <div class="right">
         <button class="btn ghost" data-close="recOverlay">Close</button>
         <button class="btn" id="btnSaveRec">Save</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ============================================================
+     DATA REQUEST (RQ) modal
+============================================================ -->
+<div class="overlay" id="rqOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header>
+      <h2 id="rqModalTitle">Data request</h2>
+      <button class="xclose" data-close="rqOverlay">✕</button>
+    </header>
+
+    <!-- view 1: choice -->
+    <div class="body" id="rqChoice">
+      <div class="field full">
+        <p class="rq-q">Have you already requested the data from the client?</p>
+        <div class="rq-opts">
+          <button type="button" class="rq-opt" id="rqDone">
+            <b>✓ Yes, already requested</b>
+            <span>Mark the Data Requested step as done</span>
+          </button>
+          <button type="button" class="rq-opt" id="rqTemplate">
+            <b>✉ No — use the sample email template</b>
+            <span>Draft the data-request email for this client and period</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- view 2: email template -->
+    <div class="body" id="rqEmail" style="display:none;">
+      <div class="field full">
+        <label>Subject</label>
+        <input id="rqSubject" readonly>
+      </div>
+      <div class="field full">
+        <label>Email body <span class="rq-hint">(editable — adjust before copying)</span></label>
+        <textarea id="rqBody" rows="13"></textarea>
+      </div>
+    </div>
+
+    <footer>
+      <div class="left" id="rqEmailActions" style="display:none;">
+        <button class="btn ghost" id="rqCopySubject">Copy subject</button>
+        <button class="btn ghost" id="rqCopyBody">Copy body</button>
+        <button class="btn ghost" id="rqMailto">Open in email app</button>
+      </div>
+      <div class="right">
+        <button class="btn ghost" data-close="rqOverlay">Cancel</button>
+        <button class="btn" id="rqMarkDone" style="display:none;">Mark as requested ✓</button>
       </div>
     </footer>
   </div>
@@ -1545,20 +1612,105 @@ function rerenderKeepFocus(){
 /* ============================================================
    Pipeline actions
 ============================================================ */
+function advanceStage(ret, clientId){
+  const rec = getRecord(ret, periods[ret], clientId);
+  if(rec.stage >= STEPS.length) return;
+  const step = STEPS[rec.stage];
+  rec.dates[step.key] = dateStampPST();
+  rec.stage++;
+  toast(`${RETURNS[ret].form}: ${step.label} · ${rec.dates[step.key]}`);
+  save(); render();
+}
 window.stepRec = function(ret, clientId, dir){
   const rec = getRecord(ret, periods[ret], clientId);
+  if(dir === 1 && rec.stage === 0){
+    openRqModal(ret, clientId);       // entering RQ: ask requested vs. email template
+    return;
+  }
   if(dir === 1 && rec.stage < STEPS.length){
-    const step = STEPS[rec.stage];
-    rec.dates[step.key] = dateStampPST();
-    rec.stage++;
-    toast(`${RETURNS[ret].form}: ${step.label} · ${rec.dates[step.key]}`);
-  } else if(dir === -1 && rec.stage > 0){
+    advanceStage(ret, clientId);
+    return;
+  }
+  if(dir === -1 && rec.stage > 0){
     rec.stage--;
     const step = STEPS[rec.stage];
     delete rec.dates[step.key];
     toast(`Rolled back to before "${step.label}"`);
+    save(); render();
   }
-  save(); render();
+};
+
+/* ---- Data-request (RQ) modal ---- */
+let rqCtx = null;   // {ret, clientId}
+// what we ask the client for, per tax type
+const RQ_DATA = {
+  WTC:  "the payroll data for the period — employee names and TINs, gross compensation per employee, statutory contributions (SSS / PhilHealth / Pag-IBIG), and taxes withheld",
+  EWT:  "the schedule of income payments to suppliers and payees subject to expanded withholding tax — payee names and TINs, ATC, amounts, and taxes withheld",
+  FWT:  "the schedule of income payments subject to final withholding tax — payee names and TINs, nature of income, amounts, and taxes withheld",
+  WVAT: "the schedule of purchases and payments where VAT was withheld for the period, with supplier details and amounts",
+  VAT:  "your sales and purchases data for the period — summary of sales invoices / official receipts and purchases with the corresponding input VAT",
+  DST:  "the list of taxable documents executed during the period (loan agreements, promissory notes, share issuances, deeds, lease contracts, etc.) with the corresponding amounts",
+  FBT:  "the schedule of fringe benefits granted to managerial and supervisory employees for the quarter, with the corresponding grossed-up monetary values",
+  IT:   "the trial balance / books summary and supporting schedules for the period"
+};
+function openRqModal(ret, clientId){
+  rqCtx = { ret, clientId };
+  const c = db.clients.find(x=>x.id===clientId);
+  $("rqModalTitle").textContent = `Data request · ${c.name} · ${RETURNS[ret].form} · ${periodLabel(ret, periods[ret])}`;
+  $("rqChoice").style.display = "";
+  $("rqEmail").style.display = "none";
+  $("rqEmailActions").style.display = "none";
+  $("rqMarkDone").style.display = "none";
+  resetModalPosition("rqOverlay");
+  $("rqOverlay").classList.add("open");
+}
+$("rqDone").onclick = ()=>{
+  closeOverlays();
+  if(rqCtx) advanceStage(rqCtx.ret, rqCtx.clientId);
+};
+$("rqTemplate").onclick = ()=>{
+  if(!rqCtx) return;
+  const { ret, clientId } = rqCtx;
+  const R = RETURNS[ret];
+  const c = db.clients.find(x=>x.id===clientId);
+  const p = periods[ret];
+  const dl = deadlineFor(ret, c, p).file;
+  $("rqSubject").value = `${c.name} — Request Data for ${R.form} Filing — ${periodLabel(ret, p)}`;
+  $("rqBody").value =
+`Dear ${c.name},
+
+Good day!
+
+In preparation for the filing of BIR Form ${R.form} (${R.name}) for ${periodLabel(ret, p)}, may we kindly request ${RQ_DATA[R.tax] || "the supporting data for the period"}.
+
+For your convenience, we will provide our standard Excel template — kindly encode the requested data in the file and upload / send it back to us once accomplished.
+
+We would appreciate receiving the completed file at the soonest so we can prepare the return well ahead of the ${fmtYmd(dl)} filing deadline.
+
+Thank you very much!
+
+Best regards,
+${c.preparer || "The MSMA Team"}
+Mora, Sanchez, Meñoza and Associates`;
+  $("rqChoice").style.display = "none";
+  $("rqEmail").style.display = "";
+  $("rqEmailActions").style.display = "flex";
+  $("rqMarkDone").style.display = "";
+};
+function rqCopy(text, what){
+  navigator.clipboard.writeText(text)
+    .then(()=> toast(`${what} copied to clipboard`))
+    .catch(()=> toast("Copy failed — select the text and copy manually"));
+}
+$("rqCopySubject").onclick = ()=> rqCopy($("rqSubject").value, "Subject");
+$("rqCopyBody").onclick    = ()=> rqCopy($("rqBody").value, "Email body");
+$("rqMailto").onclick = ()=>{
+  location.href = "mailto:?subject=" + encodeURIComponent($("rqSubject").value)
+                + "&body=" + encodeURIComponent($("rqBody").value);
+};
+$("rqMarkDone").onclick = ()=>{
+  closeOverlays();
+  if(rqCtx) advanceStage(rqCtx.ret, rqCtx.clientId);
 };
 
 /* ============================================================
