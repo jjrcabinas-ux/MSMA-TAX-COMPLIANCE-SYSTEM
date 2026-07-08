@@ -32,18 +32,14 @@
   /* left — branded team-photo panel */
   .login-visual{
     position:relative; flex:1 1 56%; overflow:hidden;
-    display:flex; flex-direction:column; justify-content:space-between;
+    display:flex; flex-direction:column; justify-content:flex-end;
     padding:46px 48px; color:#fff; background:var(--brand-dark);
     background-image:
-      linear-gradient(180deg, rgba(18,19,23,.50) 0%, rgba(18,19,23,.30) 38%, rgba(18,19,23,.92) 100%),
+      linear-gradient(180deg, rgba(18,19,23,.45) 0%, rgba(18,19,23,.28) 40%, rgba(18,19,23,.92) 100%),
       url("assets/team.jpg");
     background-size:cover; background-position:center 22%; background-repeat:no-repeat;
   }
-  .login-visual .brand{display:flex; align-items:center; gap:14px;}
-  .login-visual .brand-mark{width:46px; height:46px; flex:0 0 46px;}
-  .login-visual .brand-text{display:flex; flex-direction:column; line-height:1.16;}
-  .login-visual .brand-name{font-weight:800; font-size:1.04rem; letter-spacing:.05em;}
-  .login-visual .brand-sub{font-weight:600; font-size:.7rem; letter-spacing:.24em; color:var(--brand-lime);}
+  .login-card .brand-logo{display:block; width:auto; height:56px; max-width:260px; margin-bottom:22px;}
   .login-visual .visual-foot{max-width:470px;}
   .login-visual .visual-foot .rule{width:46px; height:3px; border-radius:2px; background:var(--brand-lime); margin-bottom:16px;}
   .login-visual .visual-foot h2{font-size:1.55rem; font-weight:700; line-height:1.28; letter-spacing:.2px;}
@@ -389,16 +385,6 @@
 ============================================================ -->
 <div id="loginScreen">
   <div class="login-visual">
-    <div class="brand">
-      <svg class="brand-mark" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M28 7 L51 32 H39 L28 20 L17 32 H5 Z" fill="#b7d94a"/>
-        <path d="M28 27 L51 52 H39 L28 40 L17 52 H5 Z" fill="#ffffff"/>
-      </svg>
-      <div class="brand-text">
-        <span class="brand-name">MORA, SANCHEZ, MEÑOZA</span>
-        <span class="brand-sub">AND ASSOCIATES</span>
-      </div>
-    </div>
     <div class="visual-foot">
       <div class="rule"></div>
       <h2>Tax compliance, handled with precision.</h2>
@@ -408,6 +394,7 @@
 
   <div class="login-panel">
     <div class="login-card">
+      <img class="brand-logo" src="assets/logo.png" alt="Mora, Sanchez, Meñoza and Associates">
       <h1>Tax Compliance System</h1>
       <div class="tag">Select your cluster to continue</div>
       <div class="login-err" id="loginErr"></div>
