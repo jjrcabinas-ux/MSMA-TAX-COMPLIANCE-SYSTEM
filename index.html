@@ -27,61 +27,16 @@
   input,select,textarea{font:inherit; color:var(--ink);}
 
   /* =================== LOGIN =================== */
-  #loginScreen{ min-height:100vh; display:flex; }
-
-  /* left — branded team-photo panel */
-  .login-visual{
-    position:relative; flex:1 1 66%; overflow:hidden;
-    display:flex; flex-direction:column; justify-content:flex-end;
-    padding:54px 60px; color:#fff; background:var(--brand-dark);
-    background-image:
-      linear-gradient(transparent 40%, rgba(0,0,0,0.65)),
-      url("assets/team.jpg");
-    background-size:cover; background-position:center 22%; background-repeat:no-repeat;
-  }
-  /* subtle dark scrim behind the top-left logo for legibility */
-  .login-visual::before{
-    content:""; position:absolute; top:0; left:0; width:380px; height:190px; z-index:1;
-    background:radial-gradient(130% 130% at 0% 0%, rgba(0,0,0,.55), transparent 68%);
-    pointer-events:none;
-  }
-  /* seamless merge: the photo dissolves into the dark form panel,
-     kept light enough over the right-most person so she stays present */
-  .login-visual::after{
-    content:""; position:absolute; top:0; right:-1px; bottom:0; width:52%; z-index:1;
-    background:linear-gradient(90deg,
-      rgba(12,24,38,0) 0%,
-      rgba(12,24,38,.16) 42%,
-      rgba(12,24,38,.30) 68%,
-      rgba(12,24,38,.44) 82%,
-      rgba(12,24,38,.72) 92%,
-      #0c1826 100%);
-    pointer-events:none;
-  }
-  .login-visual .visual-logo{
-    position:absolute; top:30px; left:40px; z-index:2;
-    width:174px; height:auto;
-    filter:drop-shadow(0 2px 10px rgba(0,0,0,.5));
-  }
-  .login-visual .visual-foot{position:relative; z-index:2; max-width:560px;}
-  .login-visual .visual-foot .rule{width:56px; height:3px; border-radius:2px; background:var(--brand-lime); margin-bottom:20px;}
-  .login-visual .visual-foot h2{font-size:2.15rem; font-weight:700; line-height:1.2; letter-spacing:.2px;}
-  .login-visual .visual-foot p{margin-top:14px; font-size:1.02rem; color:rgba(255,255,255,.84); line-height:1.6;}
-
-  /* right — dark glassmorphic sign-in panel */
-  .login-panel{
-    position:relative; overflow:hidden;
-    flex:1 1 34%; min-width:360px;
-    display:flex; align-items:center; justify-content:center;
-    padding:40px 34px;
+  #loginScreen{
+    min-height:100vh; display:flex; position:relative; overflow:hidden;
     background:
-      radial-gradient(640px 420px at 88% -12%, rgba(52,118,180,.28), transparent 60%),
-      radial-gradient(560px 420px at 74% 114%, rgba(18,58,105,.34), transparent 64%),
-      linear-gradient(90deg, #0c1826 0%, #0a1420 46%, #070f17 100%);
+      radial-gradient(900px 520px at 78% -10%, rgba(52,118,180,.28), transparent 62%),
+      radial-gradient(700px 520px at 6% 112%, rgba(18,58,105,.34), transparent 66%),
+      linear-gradient(158deg, #0c1826 0%, #0a1420 46%, #070f17 100%);
   }
-  /* faint starfield */
-  .login-panel::before{
-    content:""; position:absolute; inset:0; pointer-events:none; opacity:.55;
+  /* faint starfield across the whole screen */
+  #loginScreen::before{
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:.55; z-index:0;
     background-image:
       radial-gradient(1.4px 1.4px at 11% 19%, rgba(255,255,255,.55), transparent 55%),
       radial-gradient(1px 1px at 26% 58%, rgba(255,255,255,.34), transparent 55%),
@@ -94,12 +49,36 @@
       radial-gradient(1px 1px at 18% 84%, rgba(255,255,255,.30), transparent 55%),
       radial-gradient(1.3px 1.3px at 47% 9%, rgba(255,255,255,.45), transparent 55%);
   }
-  /* soft light beam from above */
-  .login-panel::after{
-    content:""; position:absolute; top:-150px; left:40%; width:420px; height:400px;
-    transform:translateX(-30%) rotate(16deg); pointer-events:none;
+  /* soft light beam falling toward the sign-in card */
+  #loginScreen::after{
+    content:""; position:absolute; top:-150px; left:64%; width:460px; height:420px;
+    transform:translateX(-30%) rotate(16deg); pointer-events:none; z-index:0;
     background:linear-gradient(180deg, rgba(150,205,255,.20), rgba(150,205,255,.05) 55%, transparent 75%);
     filter:blur(30px);
+  }
+
+  /* left — brand hero panel (shares the screen's dark backdrop) */
+  .login-visual{
+    position:relative; flex:1 1 66%; z-index:1;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:54px 72px; color:#fff;
+  }
+  .login-visual .visual-logo{
+    position:absolute; top:34px; left:44px;
+    width:174px; height:auto;
+    filter:drop-shadow(0 4px 16px rgba(0,0,0,.45));
+  }
+  .login-visual .visual-foot{max-width:600px;}
+  .login-visual .visual-foot .rule{width:56px; height:3px; border-radius:2px; background:var(--brand-lime); margin-bottom:22px;}
+  .login-visual .visual-foot h2{font-size:2.6rem; font-weight:700; line-height:1.18; letter-spacing:.2px;}
+  .login-visual .visual-foot p{margin-top:16px; font-size:1.05rem; color:rgba(220,235,250,.62); line-height:1.65;}
+
+  /* right — glassmorphic sign-in panel (shares the screen's dark backdrop) */
+  .login-panel{
+    position:relative; z-index:1;
+    flex:1 1 34%; min-width:360px;
+    display:flex; align-items:center; justify-content:center;
+    padding:40px 34px;
   }
   .login-card{
     position:relative; z-index:2;
