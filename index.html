@@ -813,8 +813,8 @@ function shiftPeriod(ret, p, dir){
   }
   return {y:p.y+dir};
 }
-// System floor: no periods before Jan 2026 (annual: TY 2025, filed in 2026)
-const MIN_PERIOD = { M:{y:2026,m:1}, Q:{y:2026,q:1}, A:{y:2025} };
+// System floor: no periods before Jan 2026 / Q1 2026 / TY 2026
+const MIN_PERIOD = { M:{y:2026,m:1}, Q:{y:2026,q:1}, A:{y:2026} };
 function periodOrd(f, p){ return f==="M" ? p.y*100+p.m : f==="Q" ? p.y*10+p.q : p.y; }
 function atMinPeriod(ret, p){
   const f = RETURNS[ret].freq;
