@@ -100,10 +100,6 @@
   .brand .word{font-weight:700; letter-spacing:.4px;}
   .brand .app{color:var(--muted); font-size:.92rem;}
   .topbar .spacer{flex:1;}
-  .cluster-chip{
-    font-size:.76rem; font-weight:700; color:var(--accent-deep); background:var(--accent-soft);
-    padding:4px 12px; border-radius:999px; letter-spacing:.04em;
-  }
   .sync-chip{
     display:none; align-items:center; gap:6px;
     font-size:.72rem; font-weight:600; color:var(--muted);
@@ -391,10 +387,9 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="brand">
-      <span class="word">MSMA</span>
+      <span class="word" id="brandWord">MSMA</span>
       <span class="app">Tax Compliance System</span>
     </div>
-    <span class="cluster-chip" id="clusterChip"></span>
     <span class="sync-chip" id="syncChip" title="Realtime sync status"><span class="dot"></span><span class="txt">Offline</span></span>
     <div class="spacer"></div>
     <div class="pst-clock" id="pstClock"></div>
@@ -853,7 +848,7 @@ $("loginPw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); })
 function enterApp(cl){
   cluster = cl;
   loadDb();
-  $("clusterChip").textContent = cluster + " CLUSTER";
+  $("brandWord").textContent = "MSMA " + cluster + " Cluster";
   $("loginScreen").style.display = "none";
   $("appScreen").style.display = "block";
   $("loginPw").value = "";
