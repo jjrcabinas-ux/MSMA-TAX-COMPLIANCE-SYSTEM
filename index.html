@@ -137,12 +137,6 @@
   .brand{display:flex; align-items:baseline; gap:8px; white-space:nowrap;}
   .brand .word{font-weight:700; letter-spacing:.4px;}
   .brand .app{color:var(--muted); font-size:.92rem;}
-  /* color-coded cluster pill (item 8) */
-  .cluster-pill{font-size:.66rem; font-weight:800; letter-spacing:.05em; padding:2px 8px; border-radius:999px; position:relative; top:-1px;}
-  .cluster-pill:empty{display:none;}
-  .cluster-pill.c-ADS{color:#1d4ed8; background:#e9effc;}
-  .cluster-pill.c-RPM{color:#15803d; background:#e9f6ee;}
-  .cluster-pill.c-VCM{color:#7c3aed; background:#f2e9fc;}
   .topbar .spacer{flex:1;}
   .sync-chip{
     display:none; align-items:center; gap:6px;
@@ -496,7 +490,6 @@
     </button>
     <div class="brand">
       <span class="word" id="brandWord">MSMA</span>
-      <span class="cluster-pill" id="clusterPill"></span>
       <span class="app">Tax Compliance System</span>
     </div>
     <div class="spacer"></div>
@@ -1033,8 +1026,6 @@ function enterApp(cl){
   loadDb();
   lastSyncedClientCount = db.clients.length;   // baseline until the cloud state arrives
   $("brandWord").textContent = "MSMA " + cluster + " Cluster";
-  $("clusterPill").textContent = cluster;
-  $("clusterPill").className = "cluster-pill c-" + cluster;
   $("loginScreen").style.display = "none";
   $("appScreen").style.display = "block";
   $("loginPw").value = "";
