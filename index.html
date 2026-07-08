@@ -137,6 +137,12 @@
   .brand{display:flex; align-items:baseline; gap:8px; white-space:nowrap;}
   .brand .word{font-weight:700; letter-spacing:.4px;}
   .brand .app{color:var(--muted); font-size:.92rem;}
+  /* color-coded cluster pill (item 8) */
+  .cluster-pill{font-size:.66rem; font-weight:800; letter-spacing:.05em; padding:2px 8px; border-radius:999px; position:relative; top:-1px;}
+  .cluster-pill:empty{display:none;}
+  .cluster-pill.c-ADS{color:#1d4ed8; background:#e9effc;}
+  .cluster-pill.c-RPM{color:#15803d; background:#e9f6ee;}
+  .cluster-pill.c-VCM{color:#7c3aed; background:#f2e9fc;}
   .topbar .spacer{flex:1;}
   .sync-chip{
     display:none; align-items:center; gap:6px;
@@ -305,40 +311,60 @@
   .empty b{color:var(--ink-soft);}
 
   /* summary tiles on dashboard */
-  .ret-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(236px,1fr)); gap:16px; margin-bottom:24px;}
+  .ret-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-bottom:24px;}
   .ret-card{
     position:relative; background:var(--surface); border:1px solid var(--line);
     border-radius:14px; padding:16px 16px 15px 18px; cursor:pointer; overflow:hidden;
     transition:border-color .15s, box-shadow .15s, transform .15s;
   }
   .ret-card::before{
-    content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--green);
+    content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:#15803d;
   }
-  .ret-card.warn::before{background:var(--amber);}
-  .ret-card.alert::before{background:var(--red);}
+  .ret-card.warn::before{background:#d97706;}
+  .ret-card.alert::before{background:#dc2626;}
+  .ret-card.empty::before{background:var(--line);}
   .ret-card:hover{border-color:var(--accent); box-shadow:0 10px 26px rgba(15,25,35,.10); transform:translateY(-2px);}
   .ret-card .rc-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:11px;}
   .ret-card .rc-form{font-weight:800; font-size:1.14rem; letter-spacing:.2px;}
-  .ret-card .rc-tax{font-size:.66rem; font-weight:800; letter-spacing:.04em; color:var(--accent-deep); background:var(--accent-soft); padding:3px 9px; border-radius:999px;}
+  /* consistent muted tint per tax type (item 6) */
+  .ret-card .rc-tax{font-size:.66rem; font-weight:800; letter-spacing:.04em; padding:3px 9px; border-radius:999px; color:var(--ink-soft); background:var(--paper);}
+  .ret-card .rc-tax.t-IT{color:#475569; background:#eef2f6;}
+  .ret-card .rc-tax.t-WTC{color:#4f46e5; background:#eef2ff;}
+  .ret-card .rc-tax.t-EWT{color:#0f766e; background:#e6f3f1;}
+  .ret-card .rc-tax.t-VAT{color:#b45309; background:#fdf3e3;}
   .ret-card .rc-meta{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:15px;}
   .ret-card .rc-cycle{font-size:.74rem; font-weight:700; color:var(--ink-soft); background:var(--paper); padding:3px 9px; border-radius:6px;}
-  .ret-card .rc-due{display:inline-flex; align-items:center; gap:4px; font-size:.74rem; font-weight:600; color:var(--muted);}
+  .ret-card .rc-due{display:inline-flex; align-items:center; gap:5px; font-size:.74rem; font-weight:600; color:var(--muted);}
   .ret-card .rc-due svg{width:13px; height:13px; flex:0 0 13px;}
-  .ret-card .rc-due.soon{color:var(--amber);}
-  .ret-card .rc-due.overdue{color:var(--red);}
+  .ret-card .rc-due.soon{color:#d97706;}
+  .ret-card .rc-due.overdue{color:#dc2626;}
+  .ret-card .rc-due .duepill{font-size:.64rem; font-weight:800; padding:2px 7px; border-radius:999px; white-space:nowrap; letter-spacing:.02em;}
+  .ret-card .rc-due.soon .duepill{color:#b45309; background:#fdf3e3;}
+  .ret-card .rc-due.overdue .duepill{color:#b91c1c; background:#fdecec;}
   .ret-card .rc-progress{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
   .ret-card .rc-bar{flex:1; height:7px; border-radius:999px; background:var(--paper); overflow:hidden; display:flex;}
   .ret-card .rc-bar i{display:block; height:100%; transition:width .3s ease;}
   .ret-card .rc-pct{font-size:.82rem; font-weight:800; color:var(--ink); min-width:32px; text-align:right;}
-  .ret-card .rc-stats{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; border-top:1px solid var(--line); padding-top:12px;}
-  .ret-card .rc-stat{display:flex; flex-direction:column; gap:2px;}
-  .ret-card .rc-stat b{font-size:1.05rem; font-weight:800; line-height:1; color:var(--ink);}
-  .ret-card .rc-stat span{font-size:.64rem; line-height:1.15; color:var(--muted); font-weight:600;}
-  .ret-card .rc-stat.green b{color:var(--green);}
-  .ret-card .rc-stat.amber b{color:var(--amber);}
-  .ret-card .rc-stat.red b{color:var(--red);}
-  .ret-card .rc-note{margin-top:11px; font-size:.68rem; font-weight:600; color:var(--amber);}
+  /* even spacing, labels never wrap (item 5) */
+  .ret-card .rc-stats{display:grid; grid-template-columns:repeat(4,auto); justify-content:space-between; gap:10px; border-top:1px solid var(--line); padding-top:12px;}
+  .ret-card .rc-stat{display:flex; flex-direction:column; gap:3px;}
+  .ret-card .rc-stat b{font-size:1.1rem; font-weight:800; line-height:1; color:var(--ink);}
+  .ret-card .rc-stat span{font-size:.7rem; line-height:1.15; color:var(--muted); font-weight:600; white-space:nowrap;}
+  .ret-card .rc-stat.green b{color:#15803d;}
+  .ret-card .rc-stat.amber b{color:#d97706;}
+  .ret-card .rc-stat.red b{color:#dc2626;}
+  .ret-card .rc-empty{color:var(--muted); font-size:.86rem; font-weight:500; padding:8px 0 6px;}
+  /* neutral EFPS badge with info icon (item 7) */
+  .ret-card .rc-note{display:inline-flex; align-items:center; gap:5px; margin-top:12px; font-size:.68rem; font-weight:600; color:var(--ink-soft); background:var(--paper); padding:4px 9px; border-radius:6px;}
+  .ret-card .rc-note svg{width:12px; height:12px; flex:0 0 12px; color:var(--muted);}
   .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px;}
+  /* dashboard fills remaining height so it never looks half-loaded (item 11) */
+  .dash{display:flex; flex-direction:column; min-height:calc(100vh - 140px);}
+  .dash .attn-card{flex:1 1 auto; display:flex; flex-direction:column;}
+  .dash .attn-card .attn-body{flex:1 1 auto; display:flex; flex-direction:column;}
+  .attn-empty{flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:12px; text-align:center; padding:34px 26px; min-height:170px; color:var(--muted); font-size:.92rem;}
+  .attn-check{width:40px; height:40px; color:#15803d; opacity:.75;}
 
   /* =================== MODALS =================== */
   .overlay{
@@ -460,6 +486,7 @@
     </button>
     <div class="brand">
       <span class="word" id="brandWord">MSMA</span>
+      <span class="cluster-pill" id="clusterPill"></span>
       <span class="app">Tax Compliance System</span>
     </div>
     <div class="spacer"></div>
@@ -930,6 +957,8 @@ function enterApp(cl){
   cluster = cl;
   loadDb();
   $("brandWord").textContent = "MSMA " + cluster + " Cluster";
+  $("clusterPill").textContent = cluster;
+  $("clusterPill").className = "cluster-pill c-" + cluster;
   $("loginScreen").style.display = "none";
   $("appScreen").style.display = "block";
   $("loginPw").value = "";
@@ -1050,28 +1079,44 @@ function renderDashboard(){
   const years = scopeYears();
   let cards = "", attention = "";
   let attRows = [];
-  const LAYERS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>';
+  const CAL  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  const INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
 
   Object.keys(RETURNS).forEach(ret=>{
     const R = RETURNS[ret];
+    const nClients = clientsFor(R.tax).length;
     const { s, rows } = summarize(ret, scope);
+    attRows.push(...rows);
     const pct = s.total ? Math.round(100*s.filed/s.total) : 0;
-    const statusCls = s.red > 0 ? "alert" : s.amber > 0 ? "warn" : "ontrack";
-    const countText = s.total > 0
-      ? `${s.total} filing${s.total===1?"":"s"}${s.periods>1?" · "+s.periods+" periods":""}`
-      : "No records yet";
+
+    // current-cycle deadline (existing PST-pinned logic) drives escalation
+    const gDL = deadlineFor(ret, {channel:"eBIR"}, defaultPeriod(ret)).file;
+    const dleft = daysBetween(todayInt(), gDL);
+
+    // border status (item 2): red if ≤3 days or any at-risk, amber if ≤7 days, else green
+    let statusCls;
+    if(nClients === 0) statusCls = "empty";
+    else if(dleft <= 3 || s.red > 0) statusCls = "alert";
+    else if(dleft <= 7) statusCls = "warn";
+    else statusCls = "ontrack";
+
+    // deadline text escalation (item 3)
+    let dueCls = "", duePill = "";
+    if(nClients > 0 && dleft <= 7){
+      dueCls = dleft <= 3 ? "overdue" : "soon";
+      const label = dleft < 0 ? "overdue" : dleft === 0 ? "due today" : `due in ${dleft} day${dleft===1?"":"s"}`;
+      duePill = ` <span class="duepill">${label}</span>`;
+    }
+    const dueLine = nClients === 0 ? ""
+      : `<span class="rc-due ${dueCls}">${CAL} Due ${fmtYmd(gDL)}${duePill}</span>`;
+
     const efpsNote = (ret==="1601C"||ret==="0619E")
-      ? `<div class="rc-note">EFPS staggered deadlines</div>` : "";
-    cards += `
-      <div class="ret-card ${statusCls}" onclick="gotoView('${R.tax}','${ret}')">
-        <div class="rc-head">
-          <span class="rc-form">${R.form}</span>
-          <span class="rc-tax">${R.tax}</span>
-        </div>
-        <div class="rc-meta">
-          <span class="rc-cycle">${scopeLabel(scope)}</span>
-          <span class="rc-due">${LAYERS} ${countText}</span>
-        </div>
+      ? `<div class="rc-note">${INFO} EFPS staggered deadlines</div>` : "";
+
+    // body: empty state (item 4) or progress bar + stat row
+    const body = (nClients === 0)
+      ? `<div class="rc-empty">No clients in this cycle</div>`
+      : `
         <div class="rc-progress">
           <div class="rc-bar">
             <i style="width:${pct}%; background:var(--green);"></i>
@@ -1085,45 +1130,61 @@ function renderDashboard(){
           <div class="rc-stat"><b>${s.prog}</b><span>In progress</span></div>
           <div class="rc-stat amber"><b>${s.amber}</b><span>Follow-up</span></div>
           <div class="rc-stat red"><b>${s.red}</b><span>At risk</span></div>
+        </div>`;
+
+    cards += `
+      <div class="ret-card ${statusCls}" onclick="gotoView('${R.tax}','${ret}')">
+        <div class="rc-head">
+          <span class="rc-form">${R.form}</span>
+          <span class="rc-tax t-${R.tax}">${R.tax}</span>
         </div>
+        <div class="rc-meta">
+          <span class="rc-cycle">${scopeLabel(scope)}</span>
+          ${dueLine}
+        </div>
+        ${body}
         ${efpsNote}
       </div>`;
-
-    attRows.push(...rows);
   });
 
   attRows.sort((a,b)=> a.f.rank - b.f.rank || ymdInt(a.dl.y,a.dl.m,a.dl.d) - ymdInt(b.dl.y,b.dl.m,b.dl.d));
-  attention = attRows.length ? attRows.map(r=>`
-    <tr>
-      <td><div class="cname" onclick="gotoView('${RETURNS[r.ret].tax}','${r.ret}')">${escapeHtml(r.c.name)}</div>
-          <div class="cmeta">${escapeHtml(r.c.preparer||"unassigned")}</div></td>
-      <td><b>${RETURNS[r.ret].form}</b><div class="cmeta">${periodLabel(r.ret,r.p)}</div></td>
-      <td class="due">${fmtYmd(r.dl)}</td>
-      <td>${escapeHtml(r.stageWord)}</td>
-      <td><span class="flagchip ${r.f.cls}">${r.f.text}</span></td>
-    </tr>`).join("")
-    : `<tr><td colspan="5"><div class="empty" style="padding:26px;">Nothing needs attention in this period. <b>All tracked returns are on track.</b></div></td></tr>`;
+  const attnBody = attRows.length
+    ? `<table>
+        <thead><tr><th>Client</th><th>Return</th><th>Deadline</th><th>Last step done</th><th>Flag</th></tr></thead>
+        <tbody>${attRows.map(r=>`
+          <tr>
+            <td><div class="cname" onclick="gotoView('${RETURNS[r.ret].tax}','${r.ret}')">${escapeHtml(r.c.name)}</div>
+                <div class="cmeta">${escapeHtml(r.c.preparer||"unassigned")}</div></td>
+            <td><b>${RETURNS[r.ret].form}</b><div class="cmeta">${periodLabel(r.ret,r.p)}</div></td>
+            <td class="due">${fmtYmd(r.dl)}</td>
+            <td>${escapeHtml(r.stageWord)}</td>
+            <td><span class="flagchip ${r.f.cls}">${r.f.text}</span></td>
+          </tr>`).join("")}</tbody>
+      </table>`
+    : `<div class="attn-empty">
+        <svg class="attn-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
+        <div>Nothing needs attention in this period. <b>All tracked returns are on track.</b></div>
+      </div>`;
 
   return `
-    <div class="page-head">
-      <h1>Main Tracker</h1>
-      <label class="scope-select">Period
-        <select id="dashScope" onchange="setDashScope(this.value)">
-          <option value="all" ${scope==="all"?"selected":""}>All periods</option>
-          ${years.map(y=>`<option value="${y}" ${String(scope)===String(y)?"selected":""}>TY ${y}</option>`).join("")}
-        </select>
-      </label>
-      <div class="sub">Compliance summary for the ${cluster} Cluster · ${scopeLabel(scope)} · as of ${MONTHS[t.m-1]} ${t.d}, ${t.y} (PST)</div>
-    </div>
-    <div class="ret-grid">${cards}</div>
-    <div class="card">
-      <div class="card-title">Needs attention <span class="pill">${attRows.length}</span></div>
-      <table>
-        <thead><tr><th>Client</th><th>Return</th><th>Deadline</th><th>Last step done</th><th>Flag</th></tr></thead>
-        <tbody>${attention}</tbody>
-      </table>
-    </div>
-    <p class="storage-note">Cluster data is stored in this browser (localStorage) under the ${cluster} workspace. All dates are pinned to Philippine Standard Time.</p>`;
+    <div class="dash">
+      <div class="page-head">
+        <h1>Main Tracker</h1>
+        <label class="scope-select">Period
+          <select id="dashScope" onchange="setDashScope(this.value)">
+            <option value="all" ${scope==="all"?"selected":""}>All periods</option>
+            ${years.map(y=>`<option value="${y}" ${String(scope)===String(y)?"selected":""}>TY ${y}</option>`).join("")}
+          </select>
+        </label>
+        <div class="sub">Compliance summary for the ${cluster} Cluster · ${scopeLabel(scope)} · as of ${MONTHS[t.m-1]} ${t.d}, ${t.y} (PST)</div>
+      </div>
+      <div class="ret-grid">${cards}</div>
+      <div class="card attn-card">
+        <div class="card-title">Needs attention <span class="pill">${attRows.length}</span></div>
+        <div class="attn-body">${attnBody}</div>
+      </div>
+      <p class="storage-note">Cluster data is stored in this browser (localStorage) under the ${cluster} workspace. All dates are pinned to Philippine Standard Time.</p>
+    </div>`;
 }
 
 /* -------------------- Masterlist -------------------- */
@@ -1544,15 +1605,32 @@ tickClock(); setInterval(tickClock, 1000);
   });
 
   const chip = document.getElementById("syncChip");
-  function setStatus(state){            // 'syncing' | 'online' | 'offline' | 'hidden'
+  let syncState = "hidden", lastSyncAt = null;   // elapsed-time display (item 9)
+  function agoText(ms){
+    const sec = Math.floor((Date.now() - ms) / 1000);
+    if(sec < 45) return "just now";
+    const min = Math.round(sec / 60);
+    if(min < 60) return min + "m ago";
+    return Math.round(min / 60) + "h ago";
+  }
+  function paintSync(){
     if(!chip) return;
-    if(state === "hidden"){ chip.style.display = "none"; return; }
+    if(syncState === "hidden"){ chip.style.display = "none"; return; }
     chip.style.display = "inline-flex";
     chip.classList.remove("online","syncing","offline");
-    chip.classList.add(state);
+    chip.classList.add(syncState);
     chip.querySelector(".txt").textContent =
-      state === "online" ? "Synced" : state === "syncing" ? "Syncing…" : "Offline";
+      syncState === "online"  ? "Synced" + (lastSyncAt ? " · " + agoText(lastSyncAt) : "")
+    : syncState === "syncing" ? "Syncing…"
+    :                           "Offline";
   }
+  function setStatus(state){            // 'syncing' | 'online' | 'offline' | 'hidden'
+    syncState = state;
+    if(state === "online") lastSyncAt = Date.now();
+    paintSync();
+  }
+  // keep the "Xm ago" fresh while synced
+  setInterval(()=>{ if(syncState === "online") paintSync(); }, 30000);
 
   window.fbApi = {
     _unsub: null,
