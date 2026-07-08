@@ -346,7 +346,7 @@
   .ret-card .rc-due.soon .duepill{color:#b45309; background:#fdf3e3;}
   .ret-card .rc-due.overdue .duepill{color:#b91c1c; background:#fdecec;}
   .ret-card .rc-progress{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
-  .ret-card .rc-bar{flex:1; height:7px; border-radius:999px; background:var(--paper); overflow:hidden; display:flex;}
+  .ret-card .rc-bar{flex:1; height:7px; border-radius:999px; background:#e5e7eb; overflow:hidden; display:flex;}
   .ret-card .rc-bar i{display:block; height:100%; transition:width .3s ease;}
   .ret-card .rc-pct{font-size:.82rem; font-weight:800; color:var(--ink); min-width:32px; text-align:right;}
   /* even spacing, labels never wrap (item 5) */
@@ -1256,12 +1256,13 @@ function renderDashboard(){
   const t = nowPST();
   const scope = dashScope;
   const years = scopeYears();
-  let cards = "", attention = "";
+  let attention = "";
   let attRows = [];
+  const cardList = [];   // built per return, then urgency-sorted below
   const CAL  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
   const INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
 
-  Object.keys(RETURNS).forEach(ret=>{
+  Object.keys(RETURNS).forEach((ret, idx)=>{
     const R = RETURNS[ret];
     const nClients = clientsFor(R.tax).length;
     const { s, rows } = summarize(ret, scope);
@@ -1270,7 +1271,8 @@ function renderDashboard(){
 
     // current-cycle deadline (existing PST-pinned logic) drives escalation;
     // uses the latest period that actually has a filing (0619s skip Mar/Jun/Sep/Dec, 1702Q skips Q4)
-    const gDL = deadlineFor(ret, {channel:"eBIR"}, validDefaultPeriod(ret)).file;
+    const cycleP = validDefaultPeriod(ret);
+    const gDL = deadlineFor(ret, {channel:"eBIR"}, cycleP).file;
     const dleft = daysBetween(todayInt(), gDL);
 
     // border status (item 2): red if ≤3 days or any at-risk, amber if ≤7 days, else green
@@ -1294,14 +1296,14 @@ function renderDashboard(){
       ? `<div class="rc-note">${INFO} EFPS staggered deadlines</div>` : "";
 
     // body: empty state (item 4) or progress bar + stat row
+    // bar shows completion only (green up to pct, neutral gray after);
+    // composition lives in the stat row below
     const body = (nClients === 0)
       ? `<div class="rc-empty">No clients in this cycle</div>`
       : `
         <div class="rc-progress">
           <div class="rc-bar">
-            <i style="width:${pct}%; background:var(--green);"></i>
-            <i style="width:${s.total?Math.round(100*s.amber/s.total):0}%; background:var(--amber);"></i>
-            <i style="width:${s.total?Math.round(100*s.red/s.total):0}%; background:var(--red);"></i>
+            <i style="width:${pct}%; background:#15803d;"></i>
           </div>
           <span class="rc-pct">${pct}%</span>
         </div>
@@ -1312,20 +1314,32 @@ function renderDashboard(){
           <div class="rc-stat red"><b>${s.red}</b><span>At risk</span></div>
         </div>`;
 
-    cards += `
+    cardList.push({
+      empty: nClients === 0,
+      due: ymdInt(gDL.y, gDL.m, gDL.d),   // PST-pinned cycle deadline for urgency sort
+      idx,
+      html: `
       <div class="ret-card ${statusCls}" onclick="gotoView('${R.tax}','${ret}')">
         <div class="rc-head">
           <span class="rc-form">${R.form}</span>
           <span class="rc-tax t-${R.tax}">${R.tax}</span>
         </div>
         <div class="rc-meta">
-          <span class="rc-cycle">${scopeLabel(scope)}</span>
+          <span class="rc-cycle">${periodLabel(ret, cycleP)}</span>
           ${dueLine}
         </div>
         ${body}
         ${efpsNote}
-      </div>`;
+      </div>`
+    });
   });
+
+  // urgency sort: overdue first then upcoming (both ascending by due date);
+  // cycles with no clients go last in their original order
+  cardList.sort((a,b)=>
+    (a.empty?1:0) - (b.empty?1:0) ||
+    (a.empty ? a.idx - b.idx : (a.due - b.due || a.idx - b.idx)));
+  const cards = cardList.map(c=>c.html).join("");
 
   attRows.sort((a,b)=> a.f.rank - b.f.rank || ymdInt(a.dl.y,a.dl.m,a.dl.d) - ymdInt(b.dl.y,b.dl.m,b.dl.d));
   const ATTN_LIMIT = 10;
