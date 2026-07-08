@@ -1176,7 +1176,7 @@ function renderDashboard(){
             ${years.map(y=>`<option value="${y}" ${String(scope)===String(y)?"selected":""}>TY ${y}</option>`).join("")}
           </select>
         </label>
-        <div class="sub">Compliance summary for the ${cluster} Cluster · ${scopeLabel(scope)} · as of ${MONTHS[t.m-1]} ${t.d}, ${t.y} (PST)</div>
+        <div class="sub">Compliance summary for the ${cluster} Cluster · ${scopeLabel(scope)} · as of ${MONTHS[t.m-1]} ${t.d}, ${t.y}</div>
       </div>
       <div class="ret-grid">${cards}</div>
       <div class="card attn-card">
