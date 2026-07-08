@@ -260,20 +260,39 @@
   .empty b{color:var(--ink-soft);}
 
   /* summary tiles on dashboard */
-  .ret-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; margin-bottom:22px;}
+  .ret-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(236px,1fr)); gap:16px; margin-bottom:24px;}
   .ret-card{
-    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
-    padding:16px; cursor:pointer; transition:border-color .15s, box-shadow .15s;
+    position:relative; background:var(--surface); border:1px solid var(--line);
+    border-radius:14px; padding:16px 16px 15px 18px; cursor:pointer; overflow:hidden;
+    transition:border-color .15s, box-shadow .15s, transform .15s;
   }
-  .ret-card:hover{border-color:var(--accent); box-shadow:0 4px 14px rgba(15,118,110,.08);}
-  .ret-card .rc-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px;}
-  .ret-card .rc-form{font-weight:800; font-size:1.05rem;}
-  .ret-card .rc-tax{font-size:.7rem; font-weight:700; color:var(--accent-deep); background:var(--accent-soft); padding:2px 8px; border-radius:999px;}
-  .ret-card .rc-period{font-size:.78rem; color:var(--muted); margin-bottom:12px;}
-  .ret-card .rc-bar{height:8px; border-radius:999px; background:var(--paper); overflow:hidden; margin-bottom:10px; display:flex;}
-  .ret-card .rc-bar i{display:block; height:100%;}
-  .ret-card .rc-nums{display:flex; gap:14px; font-size:.78rem; color:var(--ink-soft); flex-wrap:wrap;}
-  .ret-card .rc-nums b{font-size:.95rem;}
+  .ret-card::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--green);
+  }
+  .ret-card.warn::before{background:var(--amber);}
+  .ret-card.alert::before{background:var(--red);}
+  .ret-card:hover{border-color:var(--accent); box-shadow:0 10px 26px rgba(15,25,35,.10); transform:translateY(-2px);}
+  .ret-card .rc-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:11px;}
+  .ret-card .rc-form{font-weight:800; font-size:1.14rem; letter-spacing:.2px;}
+  .ret-card .rc-tax{font-size:.66rem; font-weight:800; letter-spacing:.04em; color:var(--accent-deep); background:var(--accent-soft); padding:3px 9px; border-radius:999px;}
+  .ret-card .rc-meta{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:15px;}
+  .ret-card .rc-cycle{font-size:.74rem; font-weight:700; color:var(--ink-soft); background:var(--paper); padding:3px 9px; border-radius:6px;}
+  .ret-card .rc-due{display:inline-flex; align-items:center; gap:4px; font-size:.74rem; font-weight:600; color:var(--muted);}
+  .ret-card .rc-due svg{width:13px; height:13px; flex:0 0 13px;}
+  .ret-card .rc-due.soon{color:var(--amber);}
+  .ret-card .rc-due.overdue{color:var(--red);}
+  .ret-card .rc-progress{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
+  .ret-card .rc-bar{flex:1; height:7px; border-radius:999px; background:var(--paper); overflow:hidden; display:flex;}
+  .ret-card .rc-bar i{display:block; height:100%; transition:width .3s ease;}
+  .ret-card .rc-pct{font-size:.82rem; font-weight:800; color:var(--ink); min-width:32px; text-align:right;}
+  .ret-card .rc-stats{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; border-top:1px solid var(--line); padding-top:12px;}
+  .ret-card .rc-stat{display:flex; flex-direction:column; gap:2px;}
+  .ret-card .rc-stat b{font-size:1.05rem; font-weight:800; line-height:1; color:var(--ink);}
+  .ret-card .rc-stat span{font-size:.64rem; line-height:1.15; color:var(--muted); font-weight:600;}
+  .ret-card .rc-stat.green b{color:var(--green);}
+  .ret-card .rc-stat.amber b{color:var(--amber);}
+  .ret-card .rc-stat.red b{color:var(--red);}
+  .ret-card .rc-note{margin-top:11px; font-size:.68rem; font-weight:600; color:var(--amber);}
   .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px;}
 
   /* =================== MODALS =================== */
@@ -931,30 +950,43 @@ function renderDashboard(){
   const t = nowPST();
   let cards = "", attention = "";
   let attRows = [];
+  const CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 
   Object.keys(RETURNS).forEach(ret=>{
     const R = RETURNS[ret];
     const { p, s } = summarize(ret);
     const pct = s.total ? Math.round(100*s.filed/s.total) : 0;
     const gDL = deadlineFor(ret, {channel:"eBIRForms"}, p).file;
+    const dleft = daysBetween(todayInt(), gDL);
+    const dueCls = dleft < 0 ? "overdue" : dleft <= 10 ? "soon" : "";
+    const statusCls = s.red > 0 ? "alert" : s.amber > 0 ? "warn" : "ontrack";
+    const efpsNote = (ret==="1601C"||ret==="0619E")
+      ? `<div class="rc-note">EFPS staggered deadlines</div>` : "";
     cards += `
-      <div class="ret-card" onclick="gotoView('${R.tax}','${ret}')">
+      <div class="ret-card ${statusCls}" onclick="gotoView('${R.tax}','${ret}')">
         <div class="rc-head">
           <span class="rc-form">${R.form}</span>
           <span class="rc-tax">${R.tax}</span>
         </div>
-        <div class="rc-period">${escapeHtml(R.name)} · ${periodLabel(ret,p)} · due ${fmtYmd(gDL)}${ret==="1601C"||ret==="0619E"?" (EFPS staggered)":""}</div>
-        <div class="rc-bar">
-          <i style="width:${pct}%; background:var(--green);"></i>
-          <i style="width:${s.total?Math.round(100*s.red/s.total):0}%; background:var(--red);"></i>
-          <i style="width:${s.total?Math.round(100*s.amber/s.total):0}%; background:var(--amber);"></i>
+        <div class="rc-meta">
+          <span class="rc-cycle">${periodLabel(ret,p)}</span>
+          <span class="rc-due ${dueCls}">${CAL} Due ${fmtYmd(gDL)}</span>
         </div>
-        <div class="rc-nums">
-          <span><span class="dot" style="background:var(--green)"></span><b>${s.filed}</b>/${s.total} filed</span>
-          <span><span class="dot" style="background:var(--ink)"></span><b>${s.prog}</b> in progress</span>
-          <span><span class="dot" style="background:var(--amber)"></span><b>${s.amber}</b> follow-up</span>
-          <span><span class="dot" style="background:var(--red)"></span><b>${s.red}</b> at risk</span>
+        <div class="rc-progress">
+          <div class="rc-bar">
+            <i style="width:${pct}%; background:var(--green);"></i>
+            <i style="width:${s.total?Math.round(100*s.amber/s.total):0}%; background:var(--amber);"></i>
+            <i style="width:${s.total?Math.round(100*s.red/s.total):0}%; background:var(--red);"></i>
+          </div>
+          <span class="rc-pct">${pct}%</span>
         </div>
+        <div class="rc-stats">
+          <div class="rc-stat green"><b>${s.filed}/${s.total}</b><span>Filed</span></div>
+          <div class="rc-stat"><b>${s.prog}</b><span>In progress</span></div>
+          <div class="rc-stat amber"><b>${s.amber}</b><span>Follow-up</span></div>
+          <div class="rc-stat red"><b>${s.red}</b><span>At risk</span></div>
+        </div>
+        ${efpsNote}
       </div>`;
 
     // attention list rows
