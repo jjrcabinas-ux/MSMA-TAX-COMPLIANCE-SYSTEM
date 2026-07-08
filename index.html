@@ -210,25 +210,30 @@
   }
   .scope-select select:hover{border-color:var(--accent);}
   .scope-select select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
-  .period-nav{display:flex; align-items:center; gap:6px; margin-left:auto;}
-  .period-nav button{
-    border:1px solid var(--line); background:var(--surface); border-radius:8px;
-    width:34px; height:34px; color:var(--ink-soft);
+  /* period control: one segmented pill — ‹ | 📅 label ⌄ | › */
+  .period-nav{
+    display:inline-flex; align-items:stretch; margin-left:auto;
+    border:1.5px solid var(--line); border-radius:11px; background:var(--surface);
+    box-shadow:0 1px 3px rgba(15,25,35,.05);
   }
-  .period-nav button:disabled{opacity:.35; cursor:not-allowed;}
-  .period-nav .period-label{
-    border:1px solid var(--line); background:var(--surface); border-radius:8px;
-    padding:6px 14px; font-weight:600; min-width:150px; text-align:center;
+  .period-nav button{border:none; background:transparent; color:var(--ink-soft); cursor:pointer;}
+  .period-nav button:disabled{opacity:.32; cursor:not-allowed;}
+  #prevPeriod, #nextPeriod{
+    width:38px; display:grid; place-items:center;
+    font-size:1.15rem; line-height:1; font-weight:600;
   }
-  /* custom period picker (replaces the unstylable native select) */
-  .period-pick{position:relative;}
+  #prevPeriod{border-right:1px solid var(--line); border-radius:9px 0 0 9px;}
+  #nextPeriod{border-left:1px solid var(--line); border-radius:0 9px 9px 0;}
+  #prevPeriod:hover:not(:disabled), #nextPeriod:hover:not(:disabled){background:var(--paper); color:var(--accent-deep);}
+  .period-pick{position:relative; display:flex;}
   .period-btn{
-    display:inline-flex; align-items:center; justify-content:center; gap:8px;
-    cursor:pointer; height:34px; outline:none;
+    display:inline-flex; align-items:center; gap:9px; padding:0 16px; height:38px;
+    font-weight:700; font-size:.92rem; color:var(--ink); white-space:nowrap; outline:none;
   }
-  .period-btn:hover{border-color:var(--accent);}
-  .period-btn:focus-visible{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
-  .period-btn .chev{width:14px; height:14px; color:var(--muted); transition:transform .18s ease;}
+  .period-btn:hover{background:var(--paper);}
+  .period-btn:focus-visible{box-shadow:inset 0 0 0 2px var(--accent-soft);}
+  .period-btn .cal-ico{width:15px; height:15px; flex:0 0 15px; color:var(--accent);}
+  .period-btn .chev{width:14px; height:14px; flex:0 0 14px; color:var(--muted); transition:transform .18s ease;}
   .period-pick.open .period-btn .chev{transform:rotate(180deg);}
   .period-pop{
     position:absolute; top:calc(100% + 8px); right:0; z-index:60; display:none;
@@ -1572,8 +1577,9 @@ function renderTaxPage(taxType){
       <div class="period-nav">
         <button id="prevPeriod" aria-label="Previous period" ${prevValidOrNull(ret,p)?"":"disabled"}>‹</button>
         <div class="period-pick" id="periodPick">
-          <button class="period-label period-btn" id="periodBtn" aria-label="Jump to period"
+          <button class="period-btn" id="periodBtn" aria-label="Jump to period"
                   onclick="event.stopPropagation(); document.getElementById('periodPick').classList.toggle('open');">
+            <svg class="cal-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             <span id="periodBtnLabel">${periodLabel(ret,p)}</span>
             <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
