@@ -1064,7 +1064,7 @@ let periods = {};                // per return key: current period
 let recCtx = null;               // {ret, period, clientId}
 let editingClientId = null;
 let searchQ = "", filterFlag = "", filterChan = "";
-let dashScope = "all";           // Main Tracker period scope: "all" or a year string
+let dashScope = "all";           // Main Tracker card filter: "all" | "M" (monthly) | "Q" (quarterly)
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1249,13 +1249,12 @@ function scopeYears(){
   });
   return [...years].sort((a,b)=>b-a);
 }
-function scopeLabel(scope){ return scope === "all" ? "All periods" : "TY " + scope; }
+function scopeLabel(scope){ return scope === "M" ? "Monthly returns" : scope === "Q" ? "Quarterly returns" : "All periods"; }
 window.setDashScope = function(v){ dashScope = v; attnExpanded = false; render(); };
 window.toggleAttn = function(){ attnExpanded = !attnExpanded; render(); };
 function renderDashboard(){
   const t = nowPST();
   const scope = dashScope;
-  const years = scopeYears();
   let attention = "";
   let attRows = [];
   const cardList = [];   // built per return, then urgency-sorted below
@@ -1264,9 +1263,11 @@ function renderDashboard(){
 
   Object.keys(RETURNS).forEach((ret, idx)=>{
     const R = RETURNS[ret];
-    const nClients = clientsFor(R.tax).length;
-    const { s, rows } = summarize(ret, scope);
+    const { s, rows } = summarize(ret, "all");   // stats always span all periods
     attRows.push(...rows);
+    // frequency filter: Monthly / Quarterly show only matching cards
+    if(scope !== "all" && R.freq !== scope) return;
+    const nClients = clientsFor(R.tax).length;
     const pct = s.total ? Math.round(100*s.filed/s.total) : 0;
 
     // current-cycle deadline (existing PST-pinned logic) drives escalation;
@@ -1373,7 +1374,6 @@ function renderDashboard(){
     Object.keys(db.records).forEach(k=>{
       if(!k.startsWith(prefix)) return;
       const p = parsePeriodKey(ret, k.slice(prefix.length));
-      if(scope !== "all" && String(p.y) !== String(scope)) return;
       Object.keys(db.records[k]).forEach(cid=>{
         const client = db.clients.find(c=>c.id===cid);
         if(!client || !(client.taxTypes && client.taxTypes[RETURNS[ret].tax])) return;
@@ -1414,8 +1414,9 @@ function renderDashboard(){
         <h1>Main Tracker</h1>
         <label class="scope-select">Period
           <select id="dashScope" onchange="setDashScope(this.value)">
-            <option value="all" ${scope==="all"?"selected":""}>All periods</option>
-            ${years.map(y=>`<option value="${y}" ${String(scope)===String(y)?"selected":""}>TY ${y}</option>`).join("")}
+            <option value="M" ${scope==="M"?"selected":""}>Monthly</option>
+            <option value="Q" ${scope==="Q"?"selected":""}>Quarterly</option>
+            <option value="all" ${scope==="all"?"selected":""}>All Period</option>
           </select>
         </label>
         <div class="sub">Compliance summary for the ${cluster} Cluster · ${scopeLabel(scope)} · as of ${MONTHS[t.m-1]} ${t.d}, ${t.y}</div>
