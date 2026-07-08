@@ -120,6 +120,21 @@
   .pw-wrap input::placeholder{color:rgba(255,255,255,.35);}
   .pw-wrap input:focus{border-color:#3ec9b8; box-shadow:0 0 0 3px rgba(62,201,184,.22);}
   .pw-wrap input:disabled{background:rgba(255,255,255,.03); color:rgba(255,255,255,.3); cursor:not-allowed;}
+  /* Chrome autofill paints inputs white — repaint with a dark inset and white text */
+  .pw-wrap input:-webkit-autofill,
+  .pw-wrap input:-webkit-autofill:hover{
+    -webkit-text-fill-color:#fff;
+    caret-color:#fff;
+    -webkit-box-shadow:0 0 0 1000px #13233a inset;
+    box-shadow:0 0 0 1000px #13233a inset;
+    transition:background-color 99999s ease-in-out 0s;
+  }
+  .pw-wrap input:-webkit-autofill:focus{
+    -webkit-text-fill-color:#fff;
+    caret-color:#fff;
+    -webkit-box-shadow:0 0 0 1000px #13233a inset, 0 0 0 3px rgba(62,201,184,.22);
+    box-shadow:0 0 0 1000px #13233a inset, 0 0 0 3px rgba(62,201,184,.22);
+  }
   /* hide the browser's built-in password reveal (Edge) so only our toggle shows */
   .pw-wrap input::-ms-reveal,
   .pw-wrap input::-ms-clear{display:none;}
