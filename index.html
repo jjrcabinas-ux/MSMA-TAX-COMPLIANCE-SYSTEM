@@ -226,6 +226,11 @@
     border:1px solid var(--line); background:var(--surface); border-radius:8px;
     padding:6px 14px; font-weight:600; min-width:150px; text-align:center;
   }
+  .period-nav select.period-label{
+    cursor:pointer; outline:none; text-align-last:center; height:34px;
+  }
+  .period-nav select.period-label:hover{border-color:var(--accent);}
+  .period-nav select.period-label:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
   .subtabs{display:flex; gap:8px; margin-bottom:16px;}
   .subtab{
     border:1px solid var(--line); background:var(--surface); border-radius:999px;
@@ -820,6 +825,26 @@ function atMinPeriod(ret, p){
   const f = RETURNS[ret].freq;
   return periodOrd(f, p) <= periodOrd(f, MIN_PERIOD[f]);
 }
+// every selectable period: floor → end of the current PST year
+// (extends to include the selected period if the user arrowed further ahead)
+function periodOptions(ret, sel){
+  const f = RETURNS[ret].freq, t = nowPST();
+  const opts = [];
+  let p = {...MIN_PERIOD[f]};
+  const horizon = Math.max(
+    periodOrd(f, f==="M" ? {y:t.y,m:12} : f==="Q" ? {y:t.y,q:4} : {y:t.y}),
+    periodOrd(f, sel)
+  );
+  while(periodOrd(f, p) <= horizon){
+    opts.push(p);
+    p = shiftPeriod(ret, p, 1);
+  }
+  return opts;
+}
+window.setPeriod = function(ret, pk){
+  periods[ret] = parsePeriodKey(ret, pk);
+  render();
+};
 // default period = latest CLOSED period as of PST today
 function defaultPeriod(ret){
   const t = nowPST();
@@ -1314,7 +1339,9 @@ function renderTaxPage(taxType){
       <h1>${page.title}</h1>
       <div class="period-nav">
         <button id="prevPeriod" aria-label="Previous period" ${atMinPeriod(ret,p)?"disabled":""}>‹</button>
-        <div class="period-label">${periodLabel(ret,p)}</div>
+        <select class="period-label" id="periodSel" aria-label="Jump to period" onchange="setPeriod('${ret}', this.value)">
+          ${periodOptions(ret, p).map(o=>`<option value="${periodKey(ret,o)}" ${periodKey(ret,o)===periodKey(ret,p)?"selected":""}>${periodLabel(ret,o)}</option>`).join("")}
+        </select>
         <button id="nextPeriod" aria-label="Next period">›</button>
       </div>
       <div class="sub">${R.form} — ${escapeHtml(R.name)} · ${list.length} applicable client${list.length===1?"":"s"} in the ${cluster} Cluster</div>
