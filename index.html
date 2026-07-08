@@ -221,6 +221,7 @@
     border:1px solid var(--line); background:var(--surface); border-radius:8px;
     width:34px; height:34px; color:var(--ink-soft);
   }
+  .period-nav button:disabled{opacity:.35; cursor:not-allowed;}
   .period-nav .period-label{
     border:1px solid var(--line); background:var(--surface); border-radius:8px;
     padding:6px 14px; font-weight:600; min-width:150px; text-align:center;
@@ -812,6 +813,13 @@ function shiftPeriod(ret, p, dir){
   }
   return {y:p.y+dir};
 }
+// System floor: no periods before Jan 2026 (annual: TY 2025, filed in 2026)
+const MIN_PERIOD = { M:{y:2026,m:1}, Q:{y:2026,q:1}, A:{y:2025} };
+function periodOrd(f, p){ return f==="M" ? p.y*100+p.m : f==="Q" ? p.y*10+p.q : p.y; }
+function atMinPeriod(ret, p){
+  const f = RETURNS[ret].freq;
+  return periodOrd(f, p) <= periodOrd(f, MIN_PERIOD[f]);
+}
 // default period = latest CLOSED period as of PST today
 function defaultPeriod(ret){
   const t = nowPST();
@@ -891,7 +899,12 @@ let editingClientId = null;
 let searchQ = "", filterFlag = "", filterChan = "";
 let dashScope = "all";           // Main Tracker period scope: "all" or a year string
 
-Object.keys(RETURNS).forEach(r => periods[r] = defaultPeriod(r));
+Object.keys(RETURNS).forEach(r => {
+  const p = defaultPeriod(r);
+  const f = RETURNS[r].freq;
+  // never start below the system floor (Jan 2026 / Q1 2026 / TY 2025)
+  periods[r] = periodOrd(f, p) < periodOrd(f, MIN_PERIOD[f]) ? {...MIN_PERIOD[f]} : p;
+});
 Object.keys(TAX_PAGES).forEach(t => activeReturn[t] = TAX_PAGES[t].returns[0]);
 
 function escapeHtml(s){
@@ -1300,7 +1313,7 @@ function renderTaxPage(taxType){
     <div class="page-head">
       <h1>${page.title}</h1>
       <div class="period-nav">
-        <button id="prevPeriod" aria-label="Previous period">‹</button>
+        <button id="prevPeriod" aria-label="Previous period" ${atMinPeriod(ret,p)?"disabled":""}>‹</button>
         <div class="period-label">${periodLabel(ret,p)}</div>
         <button id="nextPeriod" aria-label="Next period">›</button>
       </div>
@@ -1358,7 +1371,10 @@ function wirePageEvents(){
   if(TAX_PAGES[view]){
     const ret = activeReturn[view];
     const pv = $("prevPeriod"), nx = $("nextPeriod");
-    if(pv) pv.onclick = ()=>{ periods[ret] = shiftPeriod(ret, periods[ret], -1); render(); };
+    if(pv) pv.onclick = ()=>{
+      if(atMinPeriod(ret, periods[ret])) return;   // floor: nothing before Jan 2026
+      periods[ret] = shiftPeriod(ret, periods[ret], -1); render();
+    };
     if(nx) nx.onclick = ()=>{ periods[ret] = shiftPeriod(ret, periods[ret], 1); render(); };
     document.querySelectorAll(".subtab").forEach(b=>{
       b.onclick = ()=>{ activeReturn[view] = b.dataset.ret; render(); };
