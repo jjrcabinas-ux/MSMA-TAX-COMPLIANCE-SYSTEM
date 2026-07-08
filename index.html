@@ -63,11 +63,14 @@
     display:flex; flex-direction:column; justify-content:center;
     padding:54px 72px; color:#fff;
   }
-  .login-visual .visual-logo{
-    position:absolute; top:34px; left:44px;
-    width:174px; height:auto;
-    filter:drop-shadow(0 4px 16px rgba(0,0,0,.45));
+  .login-visual .brand-lockup{
+    position:absolute; top:32px; left:44px;
+    display:flex; align-items:center; gap:15px;
   }
+  .brand-lockup .brand-mark{width:76px; height:auto; flex:0 0 76px; filter:drop-shadow(0 4px 14px rgba(0,0,0,.45));}
+  .brand-lockup .brand-text{display:flex; flex-direction:column; line-height:1.2;}
+  .brand-lockup .brand-text span{font-weight:800; font-size:1.08rem; letter-spacing:.03em; color:#fff;}
+  .brand-lockup .brand-text small{font-weight:700; font-size:.7rem; letter-spacing:.26em; color:var(--brand-lime); text-transform:uppercase; margin-top:4px;}
   .login-visual .visual-foot{max-width:600px;}
   .login-visual .visual-foot .rule{width:56px; height:3px; border-radius:2px; background:var(--brand-lime); margin-bottom:22px;}
   .login-visual .visual-foot h2{font-size:2.6rem; font-weight:700; line-height:1.18; letter-spacing:.2px;}
@@ -571,7 +574,13 @@
 ============================================================ -->
 <div id="loginScreen">
   <div class="login-visual">
-    <img class="visual-logo" src="assets/logo-white.png" alt="Mora, Sanchez, Meñoza and Associates">
+    <div class="brand-lockup">
+      <img class="brand-mark" src="assets/logo-mark.png" alt="MSMA logo">
+      <div class="brand-text">
+        <span>Mora, Sanchez, Meñoza</span>
+        <small>and Associates</small>
+      </div>
+    </div>
     <div class="visual-foot">
       <div class="rule"></div>
       <h2>Tax compliance, handled with precision.</h2>
