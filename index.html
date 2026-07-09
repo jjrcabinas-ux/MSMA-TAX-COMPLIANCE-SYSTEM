@@ -376,15 +376,30 @@
     border-radius:999px; background:var(--surface); outline:none;
   }
   .toolbar input[type=search]:focus{border-color:var(--accent);}
-  .toolbar select{
-    appearance:none; -webkit-appearance:none;
-    padding:9px 36px 9px 16px; border:1px solid var(--line); border-radius:999px;
-    background:var(--surface) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 13px center / 13px;
-    font:inherit; color:var(--ink); outline:none; cursor:pointer;
-    transition:border-color .15s, box-shadow .15s;
+  /* styled dropdown component (replaces native selects) */
+  .ui-dd{position:relative; display:inline-block;}
+  .ui-dd-btn{
+    display:inline-flex; align-items:center; gap:9px;
+    padding:9px 15px 9px 16px; border:1px solid var(--line); border-radius:999px;
+    background:var(--surface); font:inherit; color:var(--ink); cursor:pointer; outline:none;
+    white-space:nowrap; transition:border-color .15s, box-shadow .15s;
   }
-  .toolbar select:hover{border-color:var(--accent);}
-  .toolbar select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .ui-dd-btn:hover{border-color:var(--accent);}
+  .ui-dd.open .ui-dd-btn{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+  .ui-dd-btn .chev{width:13px; height:13px; flex:0 0 13px; color:var(--muted); transition:transform .18s;}
+  .ui-dd.open .ui-dd-btn .chev{transform:rotate(180deg);}
+  .ui-dd-pop{
+    position:absolute; top:calc(100% + 6px); right:0; z-index:55; min-width:100%;
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 12px 30px rgba(15,23,42,.14); padding:6px; display:none; transform-origin:top center;
+  }
+  .ui-dd.open .ui-dd-pop{display:block; animation:ddReveal .24s cubic-bezier(.25,.75,.35,1);}
+  .ui-dd-opt{
+    display:block; width:100%; text-align:left; border:none; background:none; cursor:pointer;
+    padding:8px 12px; border-radius:7px; font:inherit; font-size:.9rem; color:var(--ink-soft); white-space:nowrap;
+  }
+  .ui-dd-opt:hover{background:var(--paper);}
+  .ui-dd-opt.sel{background:var(--accent-soft); color:var(--accent-deep); font-weight:600;}
   .btn{border:none; border-radius:8px; padding:9px 16px; font-weight:600; background:var(--accent); color:#fff;}
   .btn:hover{background:var(--accent-deep);}
   .btn.ghost{background:var(--surface); color:var(--ink-soft); border:1px solid var(--line);}
@@ -1576,6 +1591,25 @@ function scopeYears(){
 }
 function scopeLabel(scope){ return scope === "M" ? "Monthly returns" : scope === "Q" ? "Quarterly returns" : "All periods"; }
 window.setDashScope = function(v){ dashScope = v; attnExpanded = false; render(); };
+window.setFilterChan = function(v){ filterChan = v; render(); };
+window.setFilterFlag = function(v){ filterFlag = v; render(); };
+// styled dropdown (replaces unstylable native <select>)
+function ddSelect(id, opts, cur, setter){
+  const curOpt = opts.find(o=>o.v===String(cur)) || opts[0];
+  return `<div class="ui-dd" id="${id}">
+    <button type="button" class="ui-dd-btn"
+      onclick="event.stopPropagation(); const p=this.parentNode; document.querySelectorAll('.ui-dd.open').forEach(d=>{ if(d!==p) d.classList.remove('open'); }); p.classList.toggle('open');">
+      <span>${curOpt.label}</span>
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="ui-dd-pop" onclick="event.stopPropagation();">
+      ${opts.map(o=>`<button type="button" class="ui-dd-opt${String(o.v)===String(cur)?" sel":""}" onclick="${setter}('${o.v}')">${o.label}</button>`).join("")}
+    </div>
+  </div>`;
+}
+const CHAN_OPTS = [ {v:"",label:"All channels"}, {v:"eBIR",label:"eBIR"}, {v:"eFPS",label:"eFPS"} ];
+const FLAG_OPTS = [ {v:"",label:"All statuses"}, {v:"red",label:"Overdue / at risk"}, {v:"amber",label:"Needs follow-up"},
+                    {v:"green",label:"Filed / done"}, {v:"pending",label:"In progress"} ];
 window.toggleAttn = function(){ attnExpanded = !attnExpanded; render(); };
 function renderDashboard(){
   const t = nowPST();
@@ -1737,13 +1771,9 @@ function renderDashboard(){
     <div class="dash">
       <div class="page-head">
         <h1>Overview</h1>
-        <label class="scope-select">Period
-          <select id="dashScope" onchange="setDashScope(this.value)">
-            <option value="M" ${scope==="M"?"selected":""}>Monthly</option>
-            <option value="Q" ${scope==="Q"?"selected":""}>Quarterly</option>
-            <option value="all" ${scope==="all"?"selected":""}>All Period</option>
-          </select>
-        </label>
+        <div class="scope-select">Period
+          ${ddSelect("ddScope", [ {v:"M",label:"Monthly"}, {v:"Q",label:"Quarterly"}, {v:"all",label:"All Period"} ], scope, "setDashScope")}
+        </div>
         <div class="sub">Compliance summary for the ${cluster} Cluster · ${scopeLabel(scope)} · as of ${MONTHS[t.m-1]} ${t.d}, ${t.y}</div>
       </div>
       <div class="ret-grid">${cards}</div>
@@ -1801,11 +1831,7 @@ function renderMasterlist(){
     </div>
     <div class="toolbar">
       <input type="search" id="search" placeholder="Search client, TIN, or staff…" value="${escapeHtml(searchQ)}">
-      <select id="filterChan">
-        <option value="">All channels</option>
-        <option value="eBIR" ${filterChan==="eBIR"?"selected":""}>eBIR</option>
-        <option value="eFPS" ${filterChan==="eFPS"?"selected":""}>eFPS</option>
-      </select>
+      ${ddSelect("ddChanM", CHAN_OPTS, filterChan, "setFilterChan")}
       <button class="btn" id="btnAddClient">+ Add client</button>
     </div>
     <div class="card">
@@ -1928,18 +1954,8 @@ function renderTaxPage(taxType){
     </div>
     <div class="toolbar">
       <input type="search" id="search" placeholder="Search client, TIN, or staff…" value="${escapeHtml(searchQ)}">
-      <select id="filterFlag">
-        <option value="">All statuses</option>
-        <option value="red" ${filterFlag==="red"?"selected":""}>Overdue / at risk</option>
-        <option value="amber" ${filterFlag==="amber"?"selected":""}>Needs follow-up</option>
-        <option value="green" ${filterFlag==="green"?"selected":""}>Filed / done</option>
-        <option value="pending" ${filterFlag==="pending"?"selected":""}>In progress</option>
-      </select>
-      <select id="filterChan">
-        <option value="">All channels</option>
-        <option value="eBIR" ${filterChan==="eBIR"?"selected":""}>eBIR</option>
-        <option value="eFPS" ${filterChan==="eFPS"?"selected":""}>eFPS</option>
-      </select>
+      ${ddSelect("ddFlagT", FLAG_OPTS, filterFlag, "setFilterFlag")}
+      ${ddSelect("ddChanT", CHAN_OPTS, filterChan, "setFilterChan")}
       <button class="btn" id="btnAddClient">+ Add client</button>
     </div>
     <div class="card">
@@ -1960,10 +1976,7 @@ function renderTaxPage(taxType){
 function wirePageEvents(){
   const s = $("search");
   if(s) s.addEventListener("input", e=>{ searchQ = e.target.value; rerenderKeepFocus(); });
-  const ff = $("filterFlag");
-  if(ff) ff.addEventListener("change", e=>{ filterFlag = e.target.value; render(); });
-  const fc = $("filterChan");
-  if(fc) fc.addEventListener("change", e=>{ filterChan = e.target.value; render(); });
+  // status/channel filters are custom dropdowns (ddSelect) with inline handlers
   const add = $("btnAddClient");
   if(add) add.onclick = ()=> openClient(null);
 
@@ -2303,6 +2316,7 @@ document.addEventListener("click", e=>{
   const pick = document.getElementById("periodPick");
   if(pick) pick.classList.remove("open");
   document.querySelectorAll(".tax-dd[open]").forEach(d=>{ if(!d.contains(e.target)) d.removeAttribute("open"); });
+  document.querySelectorAll(".ui-dd.open").forEach(d=>{ if(!d.contains(e.target)) d.classList.remove("open"); });
 });
 document.addEventListener("keydown", e=>{
   if(e.key==="Escape"){
