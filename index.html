@@ -484,6 +484,8 @@
     color:#fff; font-size:.66rem; font-weight:700; margin-right:8px; vertical-align:middle; flex:0 0 26px;
   }
   .assignee{display:flex; align-items:center;}
+  .assignee .asg-col{display:flex; flex-direction:column;}
+  .assignee .asg-col .cmeta{margin-top:1px;}
   .pipe .step:hover::after{
     content:attr(data-tip); position:absolute; bottom:130%; left:50%; transform:translateX(-50%);
     background:var(--ink); color:#fff; font-size:.7rem; font-weight:500; padding:4px 8px;
@@ -1755,7 +1757,7 @@ function renderMasterlist(){
           <div class="tax-dd-pop">${types.map(t=>`<span class="taxtag t-${t}">${t}</span>`).join("")}</div>
         </details>`;
       })()}</td>
-      <td><div class="assignee">${avatarHtml(c.preparer)}<span>${escapeHtml(c.preparer||"—")}</span></div><div class="cmeta">${c.reviewer?("Rev: "+escapeHtml(c.reviewer)):""}</div></td>
+      <td><div class="assignee">${avatarHtml(c.preparer)}<div class="asg-col"><span>${escapeHtml(c.preparer||"—")}</span>${c.reviewer?`<div class="cmeta">Reviewer: ${escapeHtml(c.reviewer)}</div>`:""}</div></div></td>
       <td>${(()=>{
         const cts = c.contacts || [];
         if(!cts.length) return "—";
