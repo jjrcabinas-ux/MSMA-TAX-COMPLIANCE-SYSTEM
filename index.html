@@ -627,6 +627,7 @@
   /* working paper */
   .wp-card::before{background:var(--accent);}
   .wp-card .wp-name{font-size:.82rem; color:var(--muted); margin-bottom:14px; line-height:1.35; min-height:2.2em;}
+  .wp-card .wp-comp{font-size:.95rem; line-height:1.3; letter-spacing:0; white-space:normal; padding-right:8px;}
   .wp-card .rc-meta{margin-bottom:0;}
   .wp-card .wp-open{margin-left:auto; font-size:.8rem; color:var(--accent-deep);}
   .wp-back{margin-left:auto; padding:7px 14px; font-size:.82rem;}
@@ -1412,6 +1413,7 @@ let searchQ = "", filterFlag = "", filterChan = "";
 let dashScope = "all";           // Main Tracker card filter: "all" | "M" (monthly) | "Q" (quarterly)
 let expandedClientId = null;     // masterlist row whose detail panel is open
 let wpReturn = null;             // return key open in the Working Paper module
+let wpClient = null;             // client id selected inside that working paper
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1614,8 +1616,10 @@ function renderPlaceholder(title, sub){
 }
 
 /* -------------------- Working Paper -------------------- */
-window.openWp = function(ret){ wpReturn = ret; view = "wpdetail"; render(); };
-window.backToWp = function(){ wpReturn = null; view = "workingpaper"; render(); };
+window.openWp = function(ret){ wpReturn = ret; wpClient = null; view = "wpdetail"; render(); };
+window.backToWp = function(){ wpReturn = null; wpClient = null; view = "workingpaper"; render(); };
+window.openWpClient = function(cid){ wpClient = cid; render(); };
+window.backToWpCompanies = function(){ wpClient = null; render(); };
 function renderWorkingPaper(){
   const FREQ_LABEL = { M:"Monthly", Q:"Quarterly", A:"Annual" };
   const ordered = Object.keys(TAX_PAGES).flatMap(t=>TAX_PAGES[t].returns);   // sidebar order
@@ -1644,18 +1648,51 @@ function renderWorkingPaper(){
 function renderWpDetail(){
   const R = RETURNS[wpReturn];
   if(!R){ view = "workingpaper"; return renderWorkingPaper(); }
+
+  /* level 3 — a company's working paper */
+  if(wpClient){
+    const c = db.clients.find(x=>x.id===wpClient);
+    if(!c){ wpClient = null; return renderWpDetail(); }
+    return `
+      <div class="page-head">
+        <h1>${R.form} · ${escapeHtml(c.name)}</h1>
+        <button class="btn ghost wp-back" onclick="backToWpCompanies()">← Companies</button>
+        <div class="sub">${escapeHtml(R.name)} · TIN ${escapeHtml(c.tin||"—")} · ${cluster} Cluster</div>
+      </div>
+      <div class="card">
+        <div class="attn-empty" style="min-height:220px;">
+          <svg class="attn-check" style="color:var(--accent); opacity:.6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <div>Working paper for <b>${R.form}</b> · <b>${escapeHtml(c.name)}</b> starts here.<br>Tell us what this page should contain and we'll build it.</div>
+        </div>
+      </div>`;
+  }
+
+  /* level 2 — pick the company (masterlist clients tagged with this tax type) */
+  const list = clientsFor(R.tax);
+  const cards = list.map(c=>`
+    <div class="ret-card wp-card" onclick="openWpClient('${c.id}')">
+      <div class="rc-head">
+        <span class="rc-form wp-comp">${escapeHtml(c.name)}</span>
+        <span class="chan ${c.channel==="eFPS"?"efps":"ebir"}">${escapeHtml(c.channel||"")}</span>
+      </div>
+      <div class="wp-name">TIN ${escapeHtml(c.tin||"—")}${c.preparer?` · ${escapeHtml(c.preparer)}`:""}</div>
+      <div class="rc-meta">
+        <span class="rc-cycle">${R.form}</span>
+        <span class="wp-open">Open →</span>
+      </div>
+    </div>`).join("");
   return `
     <div class="page-head">
       <h1>${R.form} · Working Paper</h1>
       <button class="btn ghost wp-back" onclick="backToWp()">← All returns</button>
-      <div class="sub">${escapeHtml(R.name)} · ${cluster} Cluster</div>
+      <div class="sub">${escapeHtml(R.name)} · select the company to work on · ${list.length} applicable client${list.length===1?"":"s"} in the ${cluster} Cluster</div>
     </div>
+    ${list.length ? `<div class="ret-grid">${cards}</div>` : `
     <div class="card">
-      <div class="attn-empty" style="min-height:220px;">
-        <svg class="attn-check" style="color:var(--accent); opacity:.6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        <div>Working paper for <b>${R.form}</b> starts here.<br>Tell us what this page should contain and we'll build it.</div>
+      <div class="attn-empty" style="min-height:180px;">
+        <div>No clients tagged for <b>${R.tax}</b>.<br>Tag clients with the ${R.tax} tax type in the Client Masterlist first.</div>
       </div>
-    </div>`;
+    </div>`}`;
 }
 
 /* -------------------- Dashboard -------------------- */
