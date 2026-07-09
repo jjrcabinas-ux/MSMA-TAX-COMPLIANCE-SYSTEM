@@ -580,11 +580,13 @@
   }
   .overlay.open{display:flex;}
   .modal{background:var(--surface); border-radius:14px; width:100%; max-width:640px; box-shadow:0 18px 50px rgba(15,25,35,.25);}
-  /* data-request modal: user-resizable via the bottom-right grip */
-  #rqOverlay .modal{
+  /* data-request modal: choice view stays normal size; the email view
+     (.rq-expand) becomes large and user-resizable via the corner grip */
+  #rqOverlay .modal{display:flex; flex-direction:column; max-height:92vh;}
+  #rqOverlay .modal.rq-expand{
     resize:both; overflow:auto;
-    min-width:min(560px, 94vw); min-height:440px; max-width:94vw; max-height:92vh;
-    display:flex; flex-direction:column;
+    width:min(680px, 94vw); max-width:94vw;
+    min-width:min(560px, 94vw); min-height:440px;
   }
   #rqOverlay .modal .body{flex:1 1 auto; overflow:auto;}
   #rqEmail{display:flex; flex-direction:column;}
@@ -2010,6 +2012,10 @@ function openRqModal(ret, clientId){
   $("rqEmail").style.display = "none";
   $("rqEmailActions").style.display = "none";
   $("rqMarkDone").style.display = "none";
+  // reset to the compact choice view (drop email-mode size + any user resize)
+  const rqModal = document.querySelector("#rqOverlay .modal");
+  rqModal.classList.remove("rq-expand");
+  rqModal.style.width = ""; rqModal.style.height = "";
   resetModalPosition("rqOverlay");
   $("rqOverlay").classList.add("open");
 }
@@ -2060,6 +2066,7 @@ Mora, Sanchez, Meñoza and Associates`;
   $("rqEmail").style.display = "";
   $("rqEmailActions").style.display = "flex";
   $("rqMarkDone").style.display = "";
+  document.querySelector("#rqOverlay .modal").classList.add("rq-expand");
 };
 function rqCopy(text, what){
   navigator.clipboard.writeText(text)
