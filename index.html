@@ -502,17 +502,27 @@
     padding:4px 18px 18px; transform-origin:top center;
     animation:ddReveal .24s cubic-bezier(.25,.75,.35,1);
   }
-  .cd-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px 26px; margin-bottom:14px;}
-  .cd-grid > div > span, .cd-contacts > span{
-    display:block; font-size:.68rem; text-transform:uppercase; letter-spacing:.07em;
-    color:var(--muted); margin-bottom:3px;
+  .cd-card{
+    position:relative; max-width:760px;
+    background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:10px; padding:16px 20px;
+    display:grid; grid-template-columns:1.5fr 1fr; gap:16px 40px; align-items:start;
   }
-  .cd-grid .taxtag{margin-right:4px;}
-  .cd-grid p{font-size:.9rem; color:var(--ink); line-height:1.4;}
-  .cd-contacts .cd-ct{font-size:.88rem; color:var(--ink); margin-bottom:4px;}
-  .cd-contacts a{color:var(--accent-deep); text-decoration:none;}
-  .cd-contacts a:hover{text-decoration:underline;}
-  .cd-edit{margin-top:14px;}
+  .cd-col{display:flex; flex-direction:column; gap:14px; min-width:0;}
+  .cd-item > span{
+    display:block; font-size:.66rem; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--muted); margin-bottom:4px;
+  }
+  .cd-item p{font-size:.9rem; color:var(--ink); line-height:1.45;}
+  .cd-col:last-child .cd-item:first-child{padding-right:96px;}   /* keep clear of the Edit button */
+  .cd-item .taxtag{margin-right:4px;}
+  .cd-ct{font-size:.9rem; color:var(--ink); margin-bottom:6px;}
+  .cd-ct em{font-style:normal; color:var(--muted);}
+  .cd-ct .cmeta{margin-top:1px;}
+  .cd-ct a{color:var(--accent-deep); text-decoration:none;}
+  .cd-ct a:hover{text-decoration:underline;}
+  .cd-edit{position:absolute; top:12px; right:14px; padding:6px 12px; font-size:.8rem;}
+  @media (max-width:900px){ .cd-card{grid-template-columns:1fr;} .cd-item p{padding-right:0;} }
   .taxtag.t-WTC{background:#579bfc;}
   .taxtag.t-EWT{background:#00c875;}
   .taxtag.t-FWT{background:#0086c0;}
@@ -1830,19 +1840,32 @@ function renderMasterlist(){
     <tr class="detail-row" onclick="event.stopPropagation();">
       <td colspan="5">
         <div class="client-detail">
-          <div class="cd-grid">
-            <div><span>Registered business address</span><p>${escapeHtml(c.address||"—")}</p></div>
-            <div><span>RDO code</span><p>${escapeHtml(c.rdo||"—")}</p></div>
-            <div><span>Filing channel</span><p>${escapeHtml(c.channel||"—")}</p></div>
-            <div><span>Tax types</span><p>${types.map(t=>`<span class="taxtag t-${t}">${t}</span>`).join("")||"—"}</p></div>
-            <div><span>Junior Associate In-charge</span><p>${escapeHtml(c.preparer||"—")}</p></div>
-            <div><span>Senior Associate / Team Leader</span><p>${escapeHtml(c.reviewer||"—")}</p></div>
+          <div class="cd-card">
+            <button class="btn ghost cd-edit" onclick="event.stopPropagation(); openClient('${c.id}');">Edit client</button>
+            <div class="cd-col">
+              <div class="cd-item">
+                <span>Registered business address</span>
+                <p>${escapeHtml(c.address||"—")}</p>
+              </div>
+              <div class="cd-item">
+                <span>Contact person(s)</span>
+                ${cts.length ? cts.map(ct=>`
+                  <div class="cd-ct">${escapeHtml(ct.name||"—")}${ct.position?` <em>· ${escapeHtml(ct.position)}</em>`:""}
+                    ${(ct.phone||ct.email)?`<div class="cmeta">${escapeHtml(ct.phone||"")}${ct.phone&&ct.email?" · ":""}${ct.email?`<a href="mailto:${escapeHtml(ct.email)}" onclick="event.stopPropagation();">${escapeHtml(ct.email)}</a>`:""}</div>`:""}
+                  </div>`).join("") : `<p>—</p>`}
+              </div>
+            </div>
+            <div class="cd-col">
+              <div class="cd-item">
+                <span>RDO code</span>
+                <p>${escapeHtml(c.rdo||"—")}</p>
+              </div>
+              <div class="cd-item">
+                <span>Tax types</span>
+                <p>${types.map(t=>`<span class="taxtag t-${t}">${t}</span>`).join("")||"—"}</p>
+              </div>
+            </div>
           </div>
-          <div class="cd-contacts">
-            <span>Contact person(s)</span>
-            ${cts.length ? cts.map(ct=>`<div class="cd-ct">${escapeHtml(ct.name||"—")}${ct.position?" · "+escapeHtml(ct.position):""}${ct.phone?" · "+escapeHtml(ct.phone):""}${ct.email?` · <a href="mailto:${escapeHtml(ct.email)}" onclick="event.stopPropagation();">${escapeHtml(ct.email)}</a>`:""}</div>`).join("") : `<p>—</p>`}
-          </div>
-          <button class="btn ghost cd-edit" onclick="event.stopPropagation(); openClient('${c.id}');">Edit client</button>
         </div>
       </td>
     </tr>`;
