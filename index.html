@@ -496,6 +496,8 @@
   .ct-view .ct-line a:hover{text-decoration:underline;}
   /* expandable client detail row */
   .crow{cursor:pointer;}
+  /* the name is no longer an edit link — row click expands, Edit button edits */
+  .crow .cname:hover{color:inherit; text-decoration:none;}
   .crow.expanded td{border-bottom:none; background:#f5f8ff;}
   .detail-row > td{background:#f5f8ff; padding:0 !important;}
   .client-detail{
@@ -1895,7 +1897,7 @@ function renderMasterlist(){
     </tr>`;
     return `
     <tr class="crow${expanded?" expanded":""}" onclick="event.stopPropagation(); toggleClientDetails('${c.id}');">
-      <td><div class="cname" onclick="event.stopPropagation(); openClient('${c.id}');">${escapeHtml(c.name)}</div>
+      <td><div class="cname">${escapeHtml(c.name)}</div>
           <div class="cmeta">TIN ${escapeHtml(c.tin||"—")}</div></td>
       <td><span class="chan ${c.channel==="eFPS"?"efps":"ebir"}">${escapeHtml(c.channel||"")}</span></td>
       <td>${(()=>{
@@ -1921,7 +1923,7 @@ function renderMasterlist(){
   return `
     <div class="page-head">
       <h1>Client Masterlist</h1>
-      <div class="sub">${db.clients.length} client${db.clients.length===1?"":"s"} in the ${cluster} Cluster · click a name to edit</div>
+      <div class="sub">${db.clients.length} client${db.clients.length===1?"":"s"} in the ${cluster} Cluster · click a row to view details</div>
     </div>
     <div class="toolbar">
       <input type="search" id="search" placeholder="Search client, TIN, or staff…" value="${escapeHtml(searchQ)}">
