@@ -833,7 +833,7 @@
       <div class="left" id="rqEmailActions" style="display:none;">
         <button class="btn ghost" id="rqCopySubject">Copy subject</button>
         <button class="btn ghost" id="rqCopyBody">Copy body</button>
-        <button class="btn ghost" id="rqMailto">Open in email app</button>
+        <button class="btn ghost" id="rqMailto">Open in Gmail</button>
       </div>
       <div class="right">
         <button class="btn ghost" data-close="rqOverlay">Cancel</button>
@@ -1925,8 +1925,11 @@ function rqCopy(text, what){
 $("rqCopySubject").onclick = ()=> rqCopy($("rqSubject").value, "Subject");
 $("rqCopyBody").onclick    = ()=> rqCopy($("rqBody").value, "Email body");
 $("rqMailto").onclick = ()=>{
-  location.href = "mailto:?subject=" + encodeURIComponent($("rqSubject").value)
-                + "&body=" + encodeURIComponent($("rqBody").value);
+  // open Gmail compose in a new tab with the draft prefilled
+  const url = "https://mail.google.com/mail/?view=cm&fs=1"
+            + "&su="   + encodeURIComponent($("rqSubject").value)
+            + "&body=" + encodeURIComponent($("rqBody").value);
+  window.open(url, "_blank", "noopener");
 };
 $("rqMarkDone").onclick = ()=>{
   closeOverlays();
