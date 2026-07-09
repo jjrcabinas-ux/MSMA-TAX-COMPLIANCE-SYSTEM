@@ -1556,6 +1556,11 @@ document.querySelectorAll(".nav-item[data-view]").forEach(b=>{
       $("taxParent").classList.add("open");
       $("taxSubmenu").classList.add("open");
     }
+    // leaving the BIR Returns section collapses its submenu
+    if(!TAX_PAGES[view]){
+      $("taxParent").classList.remove("open");
+      $("taxSubmenu").classList.remove("open");
+    }
     render();
   };
 });
