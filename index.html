@@ -580,6 +580,17 @@
   }
   .overlay.open{display:flex;}
   .modal{background:var(--surface); border-radius:14px; width:100%; max-width:640px; box-shadow:0 18px 50px rgba(15,25,35,.25);}
+  /* data-request modal: user-resizable via the bottom-right grip */
+  #rqOverlay .modal{
+    resize:both; overflow:auto;
+    min-width:min(560px, 94vw); min-height:440px; max-width:94vw; max-height:92vh;
+    display:flex; flex-direction:column;
+  }
+  #rqOverlay .modal .body{flex:1 1 auto; overflow:auto;}
+  #rqEmail{display:flex; flex-direction:column;}
+  #rqEmail .field.full:last-child{flex:1; display:flex; flex-direction:column;}
+  #rqEmail .field.full:last-child label{flex:0 0 auto;}
+  #rqBody{flex:1; min-height:180px; resize:none;}
   .modal header{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line); cursor:move; user-select:none;}
   .modal header h2{font-size:1.05rem;}
   /* applicable tax-type chips */
