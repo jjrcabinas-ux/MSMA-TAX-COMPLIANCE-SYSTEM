@@ -815,7 +815,7 @@
 
     <button class="nav-item" id="taxParent">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      <span class="label">Tax Compliance</span>
+      <span class="label">BIR Returns</span>
       <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
     <div class="submenu" id="taxSubmenu">
@@ -828,6 +828,15 @@
       <button class="nav-item" data-view="FBT"><span class="label">FBT · Fringe Benefits</span></button>
       <button class="nav-item" data-view="IT"><span class="label">IT · Income Tax</span></button>
     </div>
+
+    <button class="nav-item" data-view="workingpaper">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      <span class="label">Working Paper</span>
+    </button>
+    <button class="nav-item" data-view="reports">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span class="label">Reports</span>
+    </button>
 
     <div class="nav-bottom">
       <div class="pst-clock" id="pstClock"></div>
@@ -1570,8 +1579,23 @@ function render(){
   const el = $("mainContent");
   if(view==="dashboard") el.innerHTML = renderDashboard();
   else if(view==="masterlist") el.innerHTML = renderMasterlist();
+  else if(view==="workingpaper") el.innerHTML = renderPlaceholder("Working Paper", "Prepare and organize supporting working papers per client and period.");
+  else if(view==="reports") el.innerHTML = renderPlaceholder("Reports", "Generate compliance and filing reports for the cluster.");
   else el.innerHTML = renderTaxPage(view);
   wirePageEvents();
+}
+function renderPlaceholder(title, sub){
+  return `
+    <div class="page-head">
+      <h1>${title}</h1>
+      <div class="sub">${sub}</div>
+    </div>
+    <div class="card">
+      <div class="attn-empty" style="min-height:220px;">
+        <svg class="attn-check" style="color:var(--accent); opacity:.6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        <div><b>${title}</b> is under construction.<br>Tell us what you want this module to do and we'll build it.</div>
+      </div>
+    </div>`;
 }
 
 /* -------------------- Dashboard -------------------- */
