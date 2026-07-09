@@ -10,10 +10,10 @@
 <link href="https://fonts.cdnfonts.com/css/utendo" rel="stylesheet">
 <style>
   :root{
-    /* monday.com-inspired palette */
-    --ink:#323338; --ink-soft:#50545e; --muted:#676879;
-    --paper:#f6f7fb; --surface:#ffffff; --line:#d0d4e4;
-    --accent:#6161ff; --accent-soft:#ecedfd; --accent-deep:#5151d5;
+    /* navy / white / electric-blue palette */
+    --ink:#0f172a; --ink-soft:#334155; --muted:#64748b;
+    --paper:#f1f5f9; --surface:#ffffff; --line:#e2e8f0;
+    --accent:#3b82f6; --accent-soft:#dbeafe; --accent-deep:#2563eb;
     --amber:#e08b00; --amber-bg:#fdf0dc;
     --red:#e2445c; --red-bg:#fce8ec;
     --green:#00a25b; --green-bg:#e5f7ee;
@@ -257,7 +257,7 @@
   /* =================== SIDEBAR =================== */
   .sidebar{
     position:fixed; top:56px; bottom:0; left:0; width:var(--sidebar-w); z-index:30;
-    background:var(--surface); border-right:1px solid var(--line);
+    background:#0f172a; border-right:1px solid #0f172a;
     padding:12px 8px; overflow-y:auto; transition:width .18s ease;
     display:flex; flex-direction:column;
   }
@@ -268,8 +268,16 @@
     padding:9px 12px; border-radius:8px; margin:1px 8px;
     color:var(--ink-soft); font-weight:500; white-space:nowrap; overflow:hidden;
   }
-  .nav-item:hover{background:#eaeefb;}
-  .nav-item.active{background:var(--accent-soft); color:var(--accent-deep); font-weight:600;}
+  .nav-item{color:#cbd5e1;}
+  .nav-item:hover{background:rgba(255,255,255,.07);}
+  .nav-item.active{background:var(--accent); color:#fff; font-weight:600;}
+  .nav-item .chev{color:#94a3b8;}
+  /* sidebar footer (clock + logout) on navy */
+  .nav-bottom{border-top:1px solid rgba(255,255,255,.12) !important;}
+  .nav-bottom .pst-clock{color:#94a3b8;}
+  .nav-bottom .pst-clock b{color:#e2e8f0;}
+  .nav-bottom .logout-btn{border:1px solid rgba(255,255,255,.22); background:transparent; color:#cbd5e1;}
+  .nav-bottom .logout-btn:hover{border-color:#f87171; color:#f87171;}
   .nav-item .ico{flex:0 0 20px; width:20px; height:20px;}
   .nav-item .chev{
     margin-left:auto; transition:transform .5s ease; flex:0 0 16px; width:16px; height:16px;
@@ -403,7 +411,7 @@
   /* monday-style solid chips: white text on status color */
   .chan{display:inline-block; font-size:.72rem; font-weight:700; letter-spacing:.03em; padding:3px 10px; border-radius:4px; color:#fff;}
   .chan.ebir{background:#00c875;}
-  .chan.efps{background:#579bfc;}
+  .chan.efps{background:#3b82f6;}
   .taxtag{
     display:inline-block; font-size:.68rem; font-weight:700; padding:3px 8px; border-radius:4px;
     background:#676879; color:#fff; margin-right:3px; letter-spacing:.02em;
