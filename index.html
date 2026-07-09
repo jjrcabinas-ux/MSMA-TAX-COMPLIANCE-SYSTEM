@@ -1414,6 +1414,7 @@ let dashScope = "all";           // Main Tracker card filter: "all" | "M" (month
 let expandedClientId = null;     // masterlist row whose detail panel is open
 let wpReturn = null;             // return key open in the Working Paper module
 let wpClient = null;             // client id selected inside that working paper
+let wpSearchQ = "";              // company search inside a working paper
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1616,7 +1617,7 @@ function renderPlaceholder(title, sub){
 }
 
 /* -------------------- Working Paper -------------------- */
-window.openWp = function(ret){ wpReturn = ret; wpClient = null; view = "wpdetail"; render(); };
+window.openWp = function(ret){ wpReturn = ret; wpClient = null; wpSearchQ = ""; view = "wpdetail"; render(); };
 window.backToWp = function(){ wpReturn = null; wpClient = null; view = "workingpaper"; render(); };
 window.openWpClient = function(cid){ wpClient = cid; render(); };
 window.backToWpCompanies = function(){ wpClient = null; render(); };
@@ -1668,7 +1669,11 @@ function renderWpDetail(){
   }
 
   /* level 2 — pick the company (masterlist clients tagged with this tax type) */
-  const list = clientsFor(R.tax);
+  const all = clientsFor(R.tax);
+  const wq = wpSearchQ.toLowerCase();
+  const list = !wq ? all : all.filter(c=>
+    c.name.toLowerCase().includes(wq) || (c.tin||"").toLowerCase().includes(wq) ||
+    (c.preparer||"").toLowerCase().includes(wq));
   const cards = list.map(c=>`
     <div class="ret-card wp-card" onclick="openWpClient('${c.id}')">
       <div class="rc-head">
@@ -1685,12 +1690,17 @@ function renderWpDetail(){
     <div class="page-head">
       <h1>${R.form} · Working Paper</h1>
       <button class="btn ghost wp-back" onclick="backToWp()">← All returns</button>
-      <div class="sub">${escapeHtml(R.name)} · select the company to work on · ${list.length} applicable client${list.length===1?"":"s"} in the ${cluster} Cluster</div>
+      <div class="sub">${escapeHtml(R.name)} · select the company to work on · ${all.length} applicable client${all.length===1?"":"s"} in the ${cluster} Cluster</div>
+    </div>
+    <div class="toolbar">
+      <input type="search" id="wpSearch" placeholder="Search company, TIN, or staff…" value="${escapeHtml(wpSearchQ)}">
     </div>
     ${list.length ? `<div class="ret-grid">${cards}</div>` : `
     <div class="card">
       <div class="attn-empty" style="min-height:180px;">
-        <div>No clients tagged for <b>${R.tax}</b>.<br>Tag clients with the ${R.tax} tax type in the Client Masterlist first.</div>
+        ${all.length
+          ? `<div>No company matches <b>“${escapeHtml(wpSearchQ)}”</b>.</div>`
+          : `<div>No clients tagged for <b>${R.tax}</b>.<br>Tag clients with the ${R.tax} tax type in the Client Masterlist first.</div>`}
       </div>
     </div>`}`;
 }
@@ -2167,6 +2177,14 @@ function renderTaxPage(taxType){
 function wirePageEvents(){
   const s = $("search");
   if(s) s.addEventListener("input", e=>{ searchQ = e.target.value; rerenderKeepFocus(); });
+  const ws = $("wpSearch");
+  if(ws) ws.addEventListener("input", e=>{
+    const pos = e.target.selectionStart;
+    wpSearchQ = e.target.value;
+    render();
+    const s2 = $("wpSearch");
+    if(s2){ s2.focus(); s2.setSelectionRange(pos,pos); }
+  });
   // status/channel filters are custom dropdowns (ddSelect) with inline handlers
   const add = $("btnAddClient");
   if(add) add.onclick = ()=> openClient(null);
