@@ -1067,11 +1067,11 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 function nowPST(){
   const fmt = new Intl.DateTimeFormat("en-PH", {
     timeZone:"Asia/Manila", year:"numeric", month:"2-digit", day:"2-digit",
-    hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23"
+    hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:true
   });
   const p = {};
   fmt.formatToParts(new Date()).forEach(x => p[x.type] = x.value);
-  return { y:+p.year, m:+p.month, d:+p.day, hh:p.hour, mm:p.minute, ss:p.second };
+  return { y:+p.year, m:+p.month, d:+p.day, hh:p.hour, mm:p.minute, ss:p.second, ap:(p.dayPeriod||"").toUpperCase() };
 }
 function ymdInt(y,m,d){ return y*10000+m*100+d; }
 function todayInt(){ const t=nowPST(); return ymdInt(t.y,t.m,t.d); }
@@ -2444,7 +2444,7 @@ function toast(msg){
 function tickClock(){
   const t = nowPST();
   const el = $("pstClock");
-  if(el) el.innerHTML = `PST · <b>${MONTHS[t.m-1].slice(0,3)} ${t.d}, ${t.y} ${t.hh}:${t.mm}:${t.ss}</b>`;
+  if(el) el.innerHTML = `PST · <b>${MONTHS[t.m-1].slice(0,3)} ${t.d}, ${t.y} ${t.hh}:${t.mm}:${t.ss} ${t.ap}</b>`;
 }
 tickClock(); setInterval(tickClock, 1000);
 
