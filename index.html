@@ -2025,8 +2025,23 @@ $("rqTemplate").onclick = ()=>{
   const p = periods[ret];
   const dl = deadlineFor(ret, c, p).file;
   $("rqSubject").value = `${c.name} — Request Data for ${R.form} Filing — ${periodLabel(ret, p)}`;
-  $("rqBody").value =
-`Dear ${c.name},
+  $("rqBody").value = R.tax === "WTC"
+? `Dear ${c.name},
+
+Good day!
+
+In preparation for the filing of BIR Form ${R.form} (${R.name}) for ${periodLabel(ret, p)}, may we kindly request your payroll data for the period.
+
+Please be informed that we have adopted a firm-standard payroll data format to streamline our tax compliance process and ensure faster, more accurate preparation of your returns. Attached below is our standard Excel template — kindly encode your payroll data in the file and send it back to us once accomplished. Moving forward, we will be using this same template for all monthly submissions.
+
+We would appreciate receiving the completed file at the soonest. Moving forward, kindly submit your payroll data every 5th day of the month so we can prepare your returns well ahead of the BIR filing deadline.
+
+Thank you very much!
+
+Best regards,
+${c.preparer || "The MSMA Team"}
+Mora, Sanchez, Meñoza and Associates`
+: `Dear ${c.name},
 
 Good day!
 
