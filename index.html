@@ -427,6 +427,33 @@
     display:flex; gap:5px; flex-wrap:wrap; min-width:170px;
   }
   .tax-dd-pop .taxtag{margin-right:0;}
+  /* contact persons: editor rows in the client modal */
+  .contact-row{display:grid; grid-template-columns:1.2fr 1fr 1fr 1.3fr 30px; gap:8px; margin-bottom:8px; align-items:center;}
+  .contact-row .ct-del{
+    border:1px solid var(--line); background:var(--surface); border-radius:6px;
+    width:30px; height:30px; color:var(--muted); font-size:.8rem; cursor:pointer;
+  }
+  .contact-row .ct-del:hover{border-color:var(--red); color:var(--red);}
+  .add-contact{
+    border:1px dashed var(--line); background:var(--surface); border-radius:8px;
+    padding:8px 14px; font-size:.8rem; font-weight:600; color:var(--accent-deep); cursor:pointer; margin-top:2px;
+  }
+  .add-contact:hover{border-color:var(--accent); background:var(--accent-soft);}
+  /* contact persons: masterlist links + viewer modal */
+  .ct-link{
+    display:block; width:100%; text-align:left; border:none; background:none; cursor:pointer;
+    color:var(--accent-deep); font-weight:600; font-size:.82rem; padding:5px 8px; border-radius:6px;
+  }
+  .ct-link:hover{background:var(--accent-soft);}
+  .ct-link.ct-single{display:inline-block; width:auto; padding:3px 6px; margin-left:-6px;}
+  .tax-dd-pop.ct-pop{display:block; min-width:210px; padding:6px;}
+  .contact-modal{max-width:400px;}
+  .ct-view .ct-line{display:flex; justify-content:space-between; gap:14px; padding:10px 2px; border-bottom:1px solid var(--line);}
+  .ct-view .ct-line:last-child{border-bottom:none;}
+  .ct-view .ct-line span{color:var(--muted); font-size:.82rem;}
+  .ct-view .ct-line b{font-weight:600; text-align:right; word-break:break-word;}
+  .ct-view .ct-line a{color:var(--accent-deep); text-decoration:none;}
+  .ct-view .ct-line a:hover{text-decoration:underline;}
   .taxtag.t-WTC{background:#579bfc;}
   .taxtag.t-EWT{background:#00c875;}
   .taxtag.t-FWT{background:#0086c0;}
@@ -784,8 +811,9 @@
         <input id="fRev" placeholder="Senior / team leader">
       </div>
       <div class="field full">
-        <label>Notes</label>
-        <textarea id="fNotes" rows="2" placeholder="Payroll cut-off quirks, contact person, etc."></textarea>
+        <label>Client Contact Person(s)</label>
+        <div id="contactsWrap"></div>
+        <button type="button" class="add-contact" id="btnAddContact">+ Add contact person</button>
       </div>
     </div>
     <footer>
@@ -880,6 +908,30 @@
       <div class="right">
         <button class="btn ghost" data-close="rqOverlay">Cancel</button>
         <button class="btn" id="rqMarkDone" style="display:none;">Mark as requested ✓</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ============================================================
+     CONTACT PERSON viewer
+============================================================ -->
+<div class="overlay" id="contactOverlay">
+  <div class="modal contact-modal" role="dialog" aria-modal="true">
+    <header>
+      <h2 id="ctModalTitle">Contact person</h2>
+      <button class="xclose" data-close="contactOverlay">✕</button>
+    </header>
+    <div class="body">
+      <div class="field full ct-view">
+        <div class="ct-line"><span>Position</span><b id="ctPos">—</b></div>
+        <div class="ct-line"><span>Contact No.</span><b id="ctPhone">—</b></div>
+        <div class="ct-line"><span>Email address</span><b id="ctEmail">—</b></div>
+      </div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="contactOverlay">Close</button>
       </div>
     </footer>
   </div>
@@ -1672,7 +1724,8 @@ function renderMasterlist(){
   const q = searchQ.toLowerCase();
   const rows = [...db.clients].sort((a,b)=>a.name.localeCompare(b.name)).filter(c=>{
     if(q && !(c.name.toLowerCase().includes(q) || (c.tin||"").toLowerCase().includes(q) ||
-              (c.preparer||"").toLowerCase().includes(q) || (c.reviewer||"").toLowerCase().includes(q))) return false;
+              (c.preparer||"").toLowerCase().includes(q) || (c.reviewer||"").toLowerCase().includes(q) ||
+              (c.contacts||[]).some(ct=>(ct.name||"").toLowerCase().includes(q)))) return false;
     if(filterChan && c.channel !== filterChan) return false;
     return true;
   }).map(c=>`
@@ -1689,7 +1742,16 @@ function renderMasterlist(){
         </details>`;
       })()}</td>
       <td><div class="assignee">${avatarHtml(c.preparer)}<span>${escapeHtml(c.preparer||"—")}</span></div><div class="cmeta">${c.reviewer?("Rev: "+escapeHtml(c.reviewer)):""}</div></td>
-      <td>${escapeHtml(c.notes||"")}</td>
+      <td>${(()=>{
+        const cts = c.contacts || [];
+        if(!cts.length) return "—";
+        if(cts.length === 1)
+          return `<button class="ct-link ct-single" onclick="showContact('${c.id}',0)">${escapeHtml(cts[0].name||"Contact")}</button>`;
+        return `<details class="tax-dd">
+          <summary>${cts.length} contacts <span class="dd-chev">▾</span></summary>
+          <div class="tax-dd-pop ct-pop">${cts.map((ct,i)=>`<button class="ct-link" onclick="showContact('${c.id}',${i})">${escapeHtml(ct.name||"Contact "+(i+1))}</button>`).join("")}</div>
+        </details>`;
+      })()}</td>
     </tr>`).join("");
 
   return `
@@ -1708,7 +1770,7 @@ function renderMasterlist(){
     </div>
     <div class="card">
       <table>
-        <thead><tr><th style="min-width:200px;">Client</th><th>Channel</th><th>Tax types</th><th>Assigned</th><th>Notes</th></tr></thead>
+        <thead><tr><th style="min-width:200px;">Client</th><th>Channel</th><th>Tax types</th><th>Assigned</th><th>Contact person</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       ${db.clients.length ? "" : `<div class="empty"><b>No clients yet.</b><br>Add your first client to start tracking compliance for this cluster.</div>`}
@@ -1995,6 +2057,48 @@ $("rqMarkDone").onclick = ()=>{
 /* ============================================================
    Client modal
 ============================================================ */
+/* ---- contact persons editor ---- */
+function contactRow(ct){
+  const d = document.createElement("div");
+  d.className = "contact-row";
+  d.innerHTML = `
+    <input class="ct-name"  placeholder="Name"           value="${escapeHtml(ct && ct.name    || "")}">
+    <input class="ct-pos"   placeholder="Position"       value="${escapeHtml(ct && ct.position|| "")}">
+    <input class="ct-phone" placeholder="Contact No."    value="${escapeHtml(ct && ct.phone   || "")}">
+    <input class="ct-email" placeholder="Email address"  value="${escapeHtml(ct && ct.email   || "")}">
+    <button type="button" class="ct-del" title="Remove contact">✕</button>`;
+  d.querySelector(".ct-del").onclick = ()=> d.remove();
+  return d;
+}
+function setContacts(list){
+  const wrap = $("contactsWrap");
+  wrap.innerHTML = "";
+  (list && list.length ? list : [null]).forEach(ct=> wrap.appendChild(contactRow(ct)));
+}
+function getContacts(){
+  return [...document.querySelectorAll("#contactsWrap .contact-row")].map(r=>({
+    name:  r.querySelector(".ct-name").value.trim(),
+    position: r.querySelector(".ct-pos").value.trim(),
+    phone: r.querySelector(".ct-phone").value.trim(),
+    email: r.querySelector(".ct-email").value.trim()
+  })).filter(ct=> ct.name || ct.position || ct.phone || ct.email);
+}
+$("btnAddContact").onclick = ()=> $("contactsWrap").appendChild(contactRow());
+
+/* ---- contact person viewer (from the masterlist) ---- */
+window.showContact = function(clientId, idx){
+  const c = db.clients.find(x=>x.id===clientId);
+  const ct = c && c.contacts && c.contacts[idx];
+  if(!ct) return;
+  document.querySelectorAll(".tax-dd[open]").forEach(d=> d.removeAttribute("open"));
+  $("ctModalTitle").textContent = ct.name || "Contact person";
+  $("ctPos").textContent = ct.position || "—";
+  $("ctPhone").innerHTML = ct.phone ? `<a href="tel:${escapeHtml(ct.phone)}">${escapeHtml(ct.phone)}</a>` : "—";
+  $("ctEmail").innerHTML = ct.email ? `<a href="mailto:${escapeHtml(ct.email)}">${escapeHtml(ct.email)}</a>` : "—";
+  resetModalPosition("contactOverlay");
+  $("contactOverlay").classList.add("open");
+};
+
 window.openClient = function(id){
   editingClientId = id || null;
   const c = db.clients.find(x=>x.id===id) || {};
@@ -2006,7 +2110,7 @@ window.openClient = function(id){
   setChan(c.channel || "eBIR");
   $("fPrep").value = c.preparer || "";
   $("fRev").value = c.reviewer || "";
-  $("fNotes").value = c.notes || "";
+  setContacts(c.contacts || []);
   const tt = c.taxTypes || {};
   Object.keys(TAX_PAGES).forEach(t=> setTaxChip(t, !!tt[t]));
   // sensible default for new clients created from a tax page
@@ -2076,7 +2180,8 @@ $("btnSaveClient").onclick = ()=>{
     name, tin:$("fTin").value.trim(), rdo:$("fRdo").value.trim(),
     address:$("fAddr").value.trim(),
     channel:getChan(),
-    preparer:$("fPrep").value.trim(), reviewer:$("fRev").value.trim(), notes:$("fNotes").value.trim(),
+    preparer:$("fPrep").value.trim(), reviewer:$("fRev").value.trim(),
+    contacts: getContacts(),
     taxTypes: Object.fromEntries(Object.keys(TAX_PAGES).map(t=>[t, taxChipOn(t)]))
   };
   if(editingClientId){
