@@ -628,6 +628,14 @@
   .wp-card::before{background:var(--accent);}
   .wp-card .wp-name{font-size:.82rem; color:var(--muted); margin-bottom:14px; line-height:1.35; min-height:2.2em;}
   .wp-card .wp-comp{font-size:.95rem; line-height:1.3; letter-spacing:0; white-space:normal; padding-right:8px;}
+  .wp-card.wp-dev{opacity:.6; cursor:default;}
+  .wp-card.wp-dev:hover{transform:none; box-shadow:none; border-color:var(--line);}
+  .wp-card.wp-dev::before{background:#c3c6d4;}
+  .dev-chip{
+    font-size:.6rem; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+    color:var(--muted); background:var(--paper); border:1px solid var(--line);
+    padding:3px 8px; border-radius:999px; flex:0 0 auto;
+  }
   .wp-card .rc-meta{margin-bottom:0;}
   .wp-card .wp-open{margin-left:auto; font-size:.8rem; color:var(--accent-deep);}
   .wp-back{margin-left:auto; padding:7px 14px; font-size:.82rem;}
@@ -1040,6 +1048,46 @@
 </div>
 
 <!-- ============================================================
+     EMPLOYEE modal (1601-C working paper)
+============================================================ -->
+<div class="overlay" id="empOverlay">
+  <div class="modal contact-modal" role="dialog" aria-modal="true">
+    <header>
+      <h2 id="empModalTitle">Add employee</h2>
+      <button class="xclose" data-close="empOverlay">✕</button>
+    </header>
+    <div class="body">
+      <div class="field full">
+        <label>Employee name</label>
+        <input id="eName" placeholder="Last name, First name MI.">
+      </div>
+      <div class="field">
+        <label>TIN</label>
+        <input id="eTin" placeholder="000-000-000-000">
+      </div>
+      <div class="field">
+        <label>Position</label>
+        <input id="ePos" placeholder="e.g. Accounting Staff">
+      </div>
+      <div class="field full">
+        <label>Employment status</label>
+        <div class="tax-chips" id="empStatusChips">
+          <button type="button" class="tax-chip" data-st="Active">Active</button>
+          <button type="button" class="tax-chip" data-st="Separated">Separated</button>
+        </div>
+      </div>
+    </div>
+    <footer>
+      <button class="danger-link" id="btnDeleteEmp" style="display:none;">Remove employee</button>
+      <div class="right">
+        <button class="btn ghost" data-close="empOverlay">Cancel</button>
+        <button class="btn" id="btnSaveEmp">Save employee</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ============================================================
      LOGIN-SUCCESS ANIMATION — BIR returns sucked into a computer
 ============================================================ -->
 <div id="warpOverlay" aria-hidden="true">
@@ -1415,6 +1463,8 @@ let expandedClientId = null;     // masterlist row whose detail panel is open
 let wpReturn = null;             // return key open in the Working Paper module
 let wpClient = null;             // client id selected inside that working paper
 let wpSearchQ = "";              // company search inside a working paper
+let wpSection = null;            // module open inside a company's working paper
+let editingEmpId = null;         // employee being edited in the masterlist modal
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1617,10 +1667,12 @@ function renderPlaceholder(title, sub){
 }
 
 /* -------------------- Working Paper -------------------- */
-window.openWp = function(ret){ wpReturn = ret; wpClient = null; wpSearchQ = ""; view = "wpdetail"; render(); };
-window.backToWp = function(){ wpReturn = null; wpClient = null; view = "workingpaper"; render(); };
-window.openWpClient = function(cid){ wpClient = cid; render(); };
-window.backToWpCompanies = function(){ wpClient = null; render(); };
+window.openWp = function(ret){ wpReturn = ret; wpClient = null; wpSection = null; wpSearchQ = ""; view = "wpdetail"; render(); };
+window.backToWp = function(){ wpReturn = null; wpClient = null; wpSection = null; view = "workingpaper"; render(); };
+window.openWpClient = function(cid){ wpClient = cid; wpSection = null; render(); };
+window.backToWpCompanies = function(){ wpClient = null; wpSection = null; render(); };
+window.openWpSection = function(key){ wpSection = key; render(); };
+window.backToWpSections = function(){ wpSection = null; render(); };
 function renderWorkingPaper(){
   const FREQ_LABEL = { M:"Monthly", Q:"Quarterly", A:"Annual" };
   const ordered = Object.keys(TAX_PAGES).flatMap(t=>TAX_PAGES[t].returns);   // sidebar order
@@ -1654,6 +1706,39 @@ function renderWpDetail(){
   if(wpClient){
     const c = db.clients.find(x=>x.id===wpClient);
     if(!c){ wpClient = null; return renderWpDetail(); }
+
+    /* 1601-C has a structured module menu */
+    if(wpReturn === "1601C"){
+      if(wpSection === "employees") return renderWpEmployees(R, c);
+      const MODULES = [
+        {key:"employees",     label:"Employee Masterlist",          desc:"Company employees covered by payroll withholding", ready:true},
+        {key:"computation",   label:"Withholding Tax Computation",  desc:"Monthly compensation withholding computation",     ready:false},
+        {key:"draft",         label:"Draft Return",                 desc:"Pre-filled 1601-C draft for review",               ready:false},
+        {key:"annualization", label:"Annualization",                desc:"Year-end annualized withholding adjustment",       ready:false},
+        {key:"dat",           label:"DAT File",                     desc:"Alphalist DAT file generation",                    ready:false}
+      ];
+      const modCards = MODULES.map(m=>`
+        <div class="ret-card wp-card ${m.ready?"":"wp-dev"}" onclick="${m.ready?`openWpSection('${m.key}')`:`toast('This module is under development')`}">
+          <div class="rc-head">
+            <span class="rc-form wp-comp">${m.label}</span>
+            ${m.ready?"":`<span class="dev-chip">Under development</span>`}
+          </div>
+          <div class="wp-name">${m.desc}</div>
+          <div class="rc-meta">
+            <span class="rc-cycle">${R.form}</span>
+            ${m.ready?`<span class="wp-open">Open →</span>`:""}
+          </div>
+        </div>`).join("");
+      return `
+        <div class="page-head">
+          <h1>${R.form} · ${escapeHtml(c.name)}</h1>
+          <button class="btn ghost wp-back" onclick="backToWpCompanies()">← Companies</button>
+          <div class="sub">${escapeHtml(R.name)} · TIN ${escapeHtml(c.tin||"—")} · ${cluster} Cluster</div>
+        </div>
+        <div class="ret-grid">${modCards}</div>`;
+    }
+
+    /* other returns: starter page for now */
     return `
       <div class="page-head">
         <h1>${R.form} · ${escapeHtml(c.name)}</h1>
@@ -1953,6 +2038,84 @@ function renderDashboard(){
       <p class="storage-note">Cluster data is stored in this browser (localStorage) under the ${cluster} workspace. All dates are pinned to Philippine Standard Time.</p>
     </div>`;
 }
+
+/* ---- 1601-C Employee Masterlist ---- */
+function renderWpEmployees(R, c){
+  const emps = c.employees || [];
+  const rows = emps.map((e,i)=>`
+    <tr class="crow" onclick="openEmp('${e.id}')">
+      <td class="cmeta">${i+1}</td>
+      <td><div class="cname">${escapeHtml(e.name)}</div></td>
+      <td class="due">${escapeHtml(e.tin||"—")}</td>
+      <td>${escapeHtml(e.position||"—")}</td>
+      <td><span class="flagchip ${e.status==="Separated"?"grey":"green"}">${escapeHtml(e.status||"Active")}</span></td>
+    </tr>`).join("");
+  return `
+    <div class="page-head">
+      <h1>Employee Masterlist</h1>
+      <button class="btn ghost wp-back" onclick="backToWpSections()">← ${R.form} · ${escapeHtml(c.name)}</button>
+      <div class="sub">${escapeHtml(c.name)} · ${emps.length} employee${emps.length===1?"":"s"} · click a row to edit</div>
+    </div>
+    <div class="toolbar">
+      <div style="flex:1;"></div>
+      <button class="btn" id="btnAddEmp" onclick="openEmp(null)">+ Add employee</button>
+    </div>
+    <div class="card">
+      ${emps.length ? `
+      <table>
+        <thead><tr><th style="width:44px;">#</th><th>Employee name</th><th>TIN</th><th>Position</th><th>Status</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>` : `
+      <div class="attn-empty" style="min-height:170px;">
+        <div>No employees encoded yet for <b>${escapeHtml(c.name)}</b>.<br>Click <b>+ Add employee</b> to start the masterlist.</div>
+      </div>`}
+    </div>`;
+}
+window.openEmp = function(id){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  editingEmpId = id || null;
+  const e = (c.employees||[]).find(x=>x.id===id) || {};
+  $("empModalTitle").textContent = id ? "Edit employee" : "Add employee";
+  $("eName").value = e.name || "";
+  $("eTin").value = e.tin || "";
+  $("ePos").value = e.position || "";
+  setEmpStatus(e.status || "Active");
+  $("btnDeleteEmp").style.display = id ? "" : "none";
+  resetModalPosition("empOverlay");
+  $("empOverlay").classList.add("open");
+};
+function setEmpStatus(v){
+  document.querySelectorAll("#empStatusChips .tax-chip").forEach(ch=> ch.classList.toggle("selected", ch.dataset.st===v));
+}
+function getEmpStatus(){
+  const s = document.querySelector("#empStatusChips .tax-chip.selected");
+  return s ? s.dataset.st : "Active";
+}
+document.querySelectorAll("#empStatusChips .tax-chip").forEach(ch=>{
+  ch.onclick = ()=> setEmpStatus(ch.dataset.st);
+});
+$("btnSaveEmp").onclick = ()=>{
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const name = $("eName").value.trim();
+  if(!name){ toast("Employee name is required"); $("eName").focus(); return; }
+  const data = { name, tin:$("eTin").value.trim(), position:$("ePos").value.trim(), status:getEmpStatus() };
+  if(!c.employees) c.employees = [];
+  if(editingEmpId){
+    Object.assign(c.employees.find(x=>x.id===editingEmpId), data);
+  } else {
+    data.id = "e" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    c.employees.push(data);
+  }
+  save(); closeOverlays(); render(); toast("Employee saved");
+};
+$("btnDeleteEmp").onclick = ()=>{
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c || !editingEmpId) return;
+  c.employees = (c.employees||[]).filter(x=>x.id!==editingEmpId);
+  save(); closeOverlays(); render(); toast("Employee removed");
+};
 
 /* -------------------- Masterlist -------------------- */
 function renderMasterlist(){
