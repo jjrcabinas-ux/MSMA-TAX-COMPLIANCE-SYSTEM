@@ -1240,6 +1240,29 @@
   </div>
 </div>
 
+<!-- Edit a recorded computation (reason required) -->
+<div class="overlay" id="wtcEditOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header>
+      <h2>Edit recorded computation</h2>
+      <button class="xclose" data-close="wtcEditOverlay">✕</button>
+    </header>
+    <div class="body">
+      <p class="imp-cols" id="wtcEditNote" style="line-height:1.55;"></p>
+      <div class="field full">
+        <label>Reason for editing</label>
+        <textarea id="wtcEditReason" rows="3" placeholder="e.g. Client sent corrected overtime figures for two employees"></textarea>
+      </div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="wtcEditOverlay">Cancel</button>
+        <button class="btn" onclick="confirmWtcEdit()">Continue to edit</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
 <!-- ============================================================
      LOGIN-SUCCESS ANIMATION — BIR returns sucked into a computer
 ============================================================ -->
@@ -1624,6 +1647,9 @@ let wpManualSel = null;          // Set of employee ids included in a manual com
 let wpWtcOn = false;             // true once "Proceed with computation" appends the IC columns
 let wpCompFreq = "Semi-monthly"; // payroll frequency driving the withholding table brackets
 let wpWtcViewRec = null;         // id of a recorded computation being viewed
+let wpWtcEditReason = null;      // reason given when editing a recorded computation (prefills remarks)
+let wpWtcEditPeriod = null;      // period of the record being edited (prefills the save popup)
+let wpWtcEditRecId = null;       // record targeted by the edit-reason popup
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1832,7 +1858,7 @@ window.openWpClient = function(cid){ wpClient = cid; wpSection = null; render();
 window.backToWpCompanies = function(){ wpClient = null; wpSection = null; render(); };
 window.openWpSection = function(key){
   wpSection = key;
-  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpWtcViewRec = null; }
+  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpWtcViewRec = null; wpWtcEditReason = null; wpWtcEditPeriod = null; wpWtcEditRecId = null; }
   render();
   if(key === "computation") openPayrollAsk();
 };
@@ -1840,7 +1866,7 @@ window.backToWpSections = function(){ wpSection = null; render(); };
 /* pipeline hook: Data Received on 1601-C jumps straight into the computation */
 window.goToWtcComputation = function(cid){
   wpReturn = "1601C"; wpClient = cid; wpSection = "computation";
-  wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpWtcViewRec = null; wpSearchQ = "";
+  wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpWtcViewRec = null; wpWtcEditReason = null; wpWtcEditPeriod = null; wpWtcEditRecId = null; wpSearchQ = "";
   view = "wpdetail";
   $("taxParent").classList.remove("open");
   $("taxSubmenu").classList.remove("open");
@@ -2015,8 +2041,8 @@ window.openWtcSave = function(){
   const c = db.clients.find(x=>x.id===wpClient);
   if(!c) return;
   const t = nowPST();
-  $("wtcPeriod").value = `${t.y}-${String(t.m).padStart(2,"0")}`;
-  $("wtcRemarks").value = "";
+  $("wtcPeriod").value = wpWtcEditPeriod || `${t.y}-${String(t.m).padStart(2,"0")}`;
+  $("wtcRemarks").value = wpWtcEditReason || "";
   updateWtcSaveNote();
   resetModalPosition("wtcSaveOverlay");
   $("wtcSaveOverlay").classList.add("open");
@@ -2057,6 +2083,7 @@ window.confirmWtcSave = function(){
     remarks, rows
   };
   c.wtcRecords.push(rec);
+  wpWtcEditReason = null; wpWtcEditPeriod = null; wpWtcEditRecId = null;
   save(); closeOverlays();
   wpWtcOn = false; wpWtcViewRec = null; wpCompPhase = "ask";   // land on the tab with the recorded list
   render();
@@ -2066,6 +2093,53 @@ window.confirmWtcSave = function(){
 window.openWtcRecord = function(id){
   wpWtcViewRec = id;
   render();
+};
+window.openWtcEdit = function(id, ev){
+  if(ev) ev.stopPropagation();
+  const c = db.clients.find(x=>x.id===wpClient);
+  const rec = c && (c.wtcRecords||[]).find(r=>r.id===id);
+  if(!rec) return;
+  wpWtcEditRecId = id;
+  const [ry, rm] = String(rec.period).split("-");
+  const nextV = (c.wtcRecords||[]).filter(r=>r.period===rec.period).length + 1;
+  $("wtcEditReason").value = "";
+  $("wtcEditNote").innerHTML =
+    `You are about to edit the recorded computation of <b>${escapeHtml(c.name)}</b> for <b>${MONTHS[+rm-1]} ${ry}</b> (version ${rec.version}).<br><br>
+    The recorded version stays locked — your changes will be saved as <b>version ${nextV}</b>, and the reason below becomes its remarks.`;
+  resetModalPosition("wtcEditOverlay");
+  $("wtcEditOverlay").classList.add("open");
+};
+window.confirmWtcEdit = function(){
+  const reason = $("wtcEditReason").value.trim();
+  if(!reason){ toast("A reason is required to edit a recorded computation"); $("wtcEditReason").focus(); return; }
+  const c = db.clients.find(x=>x.id===wpClient);
+  const rec = c && (c.wtcRecords||[]).find(r=>r.id===wpWtcEditRecId);
+  if(!rec) return;
+  // load the record's payroll values back into the manual sheet (matched by TIN, then full name)
+  migrateWtcManual(c);
+  if(!c.wtcManual) c.wtcManual = {};
+  const digits = s => String(s||"").replace(/\D/g,"");
+  const normName = s => String(s||"").toUpperCase().replace(/[^A-Z ]/g," ").replace(/\s+/g," ").trim();
+  const sel = new Set();
+  rec.rows.forEach(row=>{
+    const emp = (c.employees||[]).find(e=>
+      (digits(e.tin) && digits(e.tin) === digits(row[7])) ||
+      normName([e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ")) === normName(row[6]));
+    if(!emp) return;
+    sel.add(emp.id);
+    const saved = {};
+    row.slice(0, PAYROLL_HEADERS.length).forEach((v,i)=>{
+      if(i >= 3 && i <= 7) return;                     // identity always comes from the masterlist
+      saved[i] = String(v ?? "");
+    });
+    c.wtcManual[emp.id] = saved;
+  });
+  if(!sel.size){ toast("None of the recorded employees match the current masterlist"); return; }
+  wpVerif = null; wpManualSel = sel;
+  wpWtcEditReason = reason; wpWtcEditPeriod = rec.period;
+  wpWtcOn = false; wpWtcViewRec = null; wpCompPhase = "compute";
+  save(); closeOverlays(); render();
+  toast("Loaded for editing — Save and Record creates the next version");
 };
 
 /* ---- WTC manual sheet: Excel-style range selection + block paste ---- */
@@ -2888,7 +2962,7 @@ function renderWpComputation(R, c){
         <div class="card-title">Recorded computations <span class="pill">${recs.length}</span></div>
         <div class="table-scroll">
         <table>
-          <thead><tr><th>Period</th><th class="ta-c">Version</th><th>Saved</th><th>By</th><th class="ta-c">Frequency</th><th>Remarks</th></tr></thead>
+          <thead><tr><th>Period</th><th class="ta-c">Version</th><th>Saved</th><th>By</th><th class="ta-c">Frequency</th><th>Remarks</th><th></th></tr></thead>
           <tbody>${recs.map(r=>{
             const [ry, rm] = String(r.period).split("-");
             return `
@@ -2899,6 +2973,7 @@ function renderWpComputation(R, c){
               <td class="due">${escapeHtml(r.savedBy||"—")}</td>
               <td class="due ta-c">${escapeHtml(r.freq||"—")}</td>
               <td style="max-width:280px; white-space:normal;">${escapeHtml(r.remarks||"—")}</td>
+              <td class="ta-r"><button class="btn ghost" style="padding:4px 12px; font-size:.78rem;" onclick="openWtcEdit('${r.id}', event)">Edit</button></td>
             </tr>`;
           }).join("")}</tbody>
         </table>
@@ -3088,12 +3163,14 @@ function renderWpComputation(R, c){
       </div>`;
   }
 
-  /* default: waiting for the popup answer */
+  /* default: landing — recorded computations + add record */
   return head + `
-    <div class="card"><div class="attn-empty" style="min-height:190px;">
-      <div>First, confirm whether <b>${escapeHtml(c.name)}</b> provided the standard payroll data.</div>
-      <button class="btn" style="margin-top:14px;" onclick="openPayrollAsk()">Answer the prompt</button>
-    </div></div>` + wtcRecCard;
+    <div class="toolbar">
+      <div style="flex:1; font-size:.82rem; color:var(--muted);">${(c.wtcRecords||[]).length
+        ? "Recorded computations for this client — click a row to view."
+        : `No recorded computations yet for <b>${escapeHtml(c.name)}</b> — click <b>+ Add record</b> to start one.`}</div>
+      <button class="btn" onclick="openPayrollAsk()">+ Add record</button>
+    </div>` + wtcRecCard;
 }
 
 window.handlePayrollVerify = async function(input){
