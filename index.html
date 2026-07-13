@@ -1844,7 +1844,24 @@ window.setManualCell = function(empId, ci, el){
     const n = parseFloat(v.replace(/,/g,""));
     if(!isNaN(n)){ v = n.toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2}); el.value = v; }
   }
+  let dm = null;
+  if(ci <= 2 && v){                                    // date columns: normalize to MM/DD/YYYY
+    dm = v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if(dm){ v = `${String(+dm[1]).padStart(2,"0")}/${String(+dm[2]).padStart(2,"0")}/${dm[3]}`; el.value = v; }
+  }
   c.wtcManual[empId][ci] = v;
+  if(ci === 2){                                        // MONTH END = end of month of TO
+    const meCell = el.closest("tr").children[0];
+    if(dm){
+      const mo = +dm[1], yr = +dm[3];
+      const me = `${String(mo).padStart(2,"0")}/${String(new Date(yr, mo, 0).getDate()).padStart(2,"0")}/${yr}`;
+      c.wtcManual[empId][0] = me;
+      meCell.textContent = me; meCell.style.color = ""; meCell.style.fontSize = "";
+    } else {
+      c.wtcManual[empId][0] = "";
+      meCell.textContent = "auto — from TO"; meCell.style.color = "var(--muted)"; meCell.style.fontSize = ".75rem";
+    }
+  }
   save();
 };
 function renderWorkingPaper(){
@@ -2676,6 +2693,11 @@ function renderWpComputation(R, c){
         };
         return `<tr>${PAYROLL_HEADERS.map((h,i)=>{
           if(i >= 3 && i <= 7) return `<td class="${alignFor(i)}">${escapeHtml(locked[i])}</td>`;
+          if(i === 0){                                 // MONTH END is derived from TO, never typed
+            const me = saved[0] || "";
+            return me ? `<td class="ta-c">${escapeHtml(me)}</td>`
+                      : `<td class="ta-c" style="color:var(--muted); font-size:.75rem;">auto — from TO</td>`;
+          }
           const val = saved[i] != null ? saved[i] : (i === 8 ? fmt2(e.dailyRate) : "");
           return `<td class="${alignFor(i)}" style="padding:3px 5px;"><input class="wtc-cell ${i>=8?"ta-r":"ta-c"}" value="${escapeHtml(val)}"${i<=2?' placeholder="MM/DD/YYYY"':''} onchange="setManualCell('${e.id}',${i},this)"></td>`;
         }).join("")}</tr>`;
@@ -2685,7 +2707,7 @@ function renderWpComputation(R, c){
       <div class="card">
         <div class="card-title">Standard Payroll Data <span class="pill">${rowCount} row${rowCount===1?"":"s"}</span></div>
         <div class="wtc-note">${manual
-          ? `<b>Manual mode</b> — names, TINs, and daily rates carried from the Employee Masterlist. Click any cell to encode the payroll figures; entries save automatically.`
+          ? `<b>Manual mode</b> — names, TINs, and daily rates carried from the Employee Masterlist. Click any cell to encode the payroll figures; entries save automatically. MONTH END fills itself from the end of the month of TO.`
           : `Values copied as-is from <b>${escapeHtml(wpVerif.fileName)}</b> — hardcoded, nothing is recomputed.`}</div>
         <div class="wtc-scroll"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
       </div>
