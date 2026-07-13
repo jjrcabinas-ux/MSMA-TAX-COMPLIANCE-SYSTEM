@@ -3930,7 +3930,7 @@ function renderTaxPage(taxType){
     </div>` : "";
 
   let stats = {total:0, filed:0, prog:0, amber:0, red:0};
-  let rows = "";
+  const rowEntries = [];
   list.forEach(c=>{
     const rec = getRecord(ret, p, c.id);
     const flag = flagFor(ret, c, p, rec);
@@ -3958,7 +3958,7 @@ function renderTaxPage(taxType){
       : rec.stage>=STEPS.length ? "Archived ✓"
       : `${STEPS[rec.stage-1].label} · next: ${STEPS[rec.stage].label}`;
 
-    rows += `
+    rowEntries.push({ rank: flag.rank * 10 + (flag.text === "OVERDUE" ? 0 : 1), html: `
       <tr>
         <td>
           <div class="cname" onclick="openClient('${c.id}')">${escapeHtml(c.name)}</div>
@@ -3980,8 +3980,10 @@ function renderTaxPage(taxType){
           ${fmtMoney(rec.taxDue)}${rec.ref?`<div class="cmeta">FRN ${escapeHtml(rec.ref)}</div>`:""}
         </td>
         <td><span class="flagchip ${flag.cls}">${flag.text}</span></td>
-      </tr>`;
+      </tr>` });
   });
+  // urgency first: OVERDUE / At risk on top, then follow-ups, on-track, filed, complete
+  const rows = rowEntries.sort((a,b)=> a.rank - b.rank).map(e=>e.html).join("");
 
   return `
     <div class="page-head">
