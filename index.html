@@ -1868,6 +1868,17 @@ window.setManualCell = function(empId, ci, el, noSave){
   if(!noSave) save();
 };
 
+/* v2 inserted DE MINIMIS BENEFITS at column 15 — shift older saved entries up */
+function migrateWtcManual(c){
+  if(!c.wtcManual || c.wtcManualV >= 2) return;
+  Object.values(c.wtcManual).forEach(row=>{
+    for(let i = 29; i >= 15; i--){
+      if(row[i] != null){ row[i+1] = row[i]; delete row[i]; }
+    }
+  });
+  c.wtcManualV = 2;
+}
+
 /* ---- WTC manual sheet: Excel-style range selection + block paste ---- */
 let wtcSel = null;                                     // {r1,c1,r2,c2} in grid coords
 function wtcSelCells(){
@@ -2494,7 +2505,7 @@ const PAYROLL_HEADERS = [
   "MONTH END","FROM","TO",
   "LAST NAME","FIRST NAME","MIDDLE NAME","FULL NAME","TIN",
   "DAILY RATE","NO OF DAYS","BASIC PAY","OVERTIME PAY","HOLIDAY PAY","ALLOWANCES",
-  "13TH MONTH PAY","OTHER INCENTIVES",
+  "13TH MONTH PAY","DE MINIMIS BENEFITS","OTHER INCENTIVES",
   "LATE","ABSENT","TARDINESS","LEAVE WITHOUT PAY",
   "GROSS PAY","SSS","HDMF","PHIC","W/TAX",
   "SSS LOAN","HDMF LOAN","PERSONAL LOAN","OTHER DEDUCTION","NET PAY"
@@ -2505,9 +2516,9 @@ window.downloadPayrollTemplate = async function(){
   const ws = XLSX.utils.aoa_to_sheet([
     headers,
     ["06/30/2026","06/01/2026","06/15/2026","DELA CRUZ","JUAN","PROTACIO","JUAN PROTACIO DELA CRUZ","123-456-789-000",
-     1136.36, 11, 12500, 0, 0, 1000, 0, 0, 0, 0, 0, 0, 13500, 562.50, 100, 187.50, 937.50, 0, 0, 0, 0, 11712.50],
+     1136.36, 11, 12500, 0, 0, 1000, 0, 0, 0, 0, 0, 0, 0, 13500, 562.50, 100, 187.50, 937.50, 0, 0, 0, 0, 11712.50],
     ["06/30/2026","06/16/2026","06/30/2026","DELA CRUZ","JUAN","PROTACIO","JUAN PROTACIO DELA CRUZ","123-456-789-000",
-     1136.36, 11, 12500, 500, 0, 1000, 0, 0, 150, 0, 0, 0, 13850, 562.50, 100, 187.50, 937.50, 0, 0, 0, 0, 12062.50]
+     1136.36, 11, 12500, 500, 0, 1000, 0, 0, 0, 150, 0, 0, 0, 13850, 562.50, 100, 187.50, 937.50, 0, 0, 0, 0, 12062.50]
   ]);
   ws["!cols"] = headers.map(h=>({ wch: Math.max(10, Math.min(24, h.length + 4)) }));
   const wb = XLSX.utils.book_new();
@@ -2753,6 +2764,7 @@ function renderWpComputation(R, c){
         : emptyRow;
     } else {
       // manual: identity columns locked from the masterlist, everything else typed in
+      migrateWtcManual(c);
       const sel = wpManualSel || new Set();
       const emps = (c.employees||[]).filter(e=>sel.has(e.id));
       rowCount = emps.length;
