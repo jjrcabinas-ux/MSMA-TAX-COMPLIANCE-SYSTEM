@@ -661,6 +661,33 @@
   /* 1601-C draft return form lines */
   .draft-strong td{font-weight:700; background:#f8fafc;}
   .draft-sec td{font-weight:700; font-size:.78rem; letter-spacing:.04em; color:var(--muted); background:#fbfcfd;}
+  /* A4 draft-return popup */
+  .a4-overlay{align-items:flex-start; overflow-y:auto; padding:28px 12px;}
+  .a4-sheet{position:relative; background:#fff; width:min(794px, 96vw); min-height:1050px; margin:auto;
+    border-radius:6px; box-shadow:0 24px 70px rgba(2,6,23,.5); padding:50px 56px 34px; color:var(--ink);}
+  .a4-close{position:absolute; top:14px; right:14px;}
+  .a4-head{display:flex; gap:14px; align-items:center; border-bottom:2.5px solid #0f172a; padding-bottom:14px;}
+  .a4-head img{width:46px; height:46px; object-fit:contain;}
+  .a4-firm{font-weight:800; letter-spacing:.02em; font-size:1.04rem;}
+  .a4-firmsub{color:var(--muted); font-size:.75rem; margin-top:2px;}
+  .a4-title{text-align:center; font-weight:800; font-size:1.06rem; margin-top:24px; letter-spacing:.03em;}
+  .a4-titlesub{text-align:center; color:var(--muted); font-size:.78rem; margin:4px 0 20px;}
+  .a4-info{width:100%; border-collapse:collapse; margin-bottom:16px; font-size:.8rem;}
+  .a4-info td{padding:4px 6px; border-bottom:1px dotted var(--line);}
+  .a4-info td:nth-child(odd){color:var(--muted); width:128px; font-weight:600;}
+  .a4-lines{width:100%; border-collapse:collapse; font-size:.82rem;}
+  .a4-lines th{background:#0f172a; color:#fff; padding:6px 9px; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; text-align:left;}
+  .a4-lines td{border:1px solid var(--line); padding:5px 9px;}
+  .a4-lines .a4-strong td{font-weight:700; background:#f8fafc;}
+  .a4-lines .a4-sec td{font-weight:700; font-size:.7rem; color:var(--muted); background:#fbfcfd; letter-spacing:.05em;}
+  .a4-sheet tbody tr:hover{background:transparent;}
+  .a4-sign{display:flex; justify-content:space-between; gap:40px; margin-top:48px; padding:0 10px;}
+  .a4-sign > div{flex:1; text-align:center;}
+  .sig-name{font-weight:700; min-height:1.15em;}
+  .sig-line{border-bottom:1.5px solid #0f172a; margin:2px 20px 6px;}
+  .sig-role{font-size:.72rem; color:var(--muted);}
+  .a4-foot{margin-top:34px; text-align:center; font-size:.7rem; color:var(--muted);}
+  .a4-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:22px; border-top:1px solid var(--line); padding-top:14px;}
   .wtc-scroll.dragging{user-select:none;}
   .wtc-scroll.dragging .wtc-cell{cursor:cell;}
   th.ta-c, td.ta-c{text-align:center;}
@@ -1261,6 +1288,60 @@
       <div class="right">
         <button class="btn ghost" data-close="wtcEditOverlay">Cancel</button>
         <button class="btn" onclick="confirmWtcEdit()">Continue to edit</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- A4 draft return (view / save / PDF) -->
+<div class="overlay a4-overlay" id="draftA4Overlay" onclick="if(event.target===this) closeOverlays();">
+  <div class="a4-sheet">
+    <button class="xclose a4-close" data-close="draftA4Overlay">✕</button>
+    <div id="draftA4Body"></div>
+    <div class="a4-actions">
+      <button class="btn ghost" onclick="draftReturnPdf()">⬇ Generate PDF</button>
+      <button class="btn" id="draftSaveBtn" onclick="saveDraftForApproval()">Save draft return for approval</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add draft return: pick the recorded computation -->
+<div class="overlay" id="draftPickOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header>
+      <h2>Add draft return</h2>
+      <button class="xclose" data-close="draftPickOverlay">✕</button>
+    </header>
+    <div class="body">
+      <p class="imp-cols" style="line-height:1.5;">Select the recorded computation to draft from. Only <b>one draft per month</b> is allowed — an additional draft for the same month requires a reason.</p>
+      <div id="draftPickBody" style="grid-column:1/-1;"></div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="draftPickOverlay">Cancel</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- Additional draft for a month that already has one: reason required -->
+<div class="overlay" id="draftReasonOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header>
+      <h2>Additional draft for the month</h2>
+      <button class="xclose" data-close="draftReasonOverlay">✕</button>
+    </header>
+    <div class="body">
+      <p class="imp-cols" id="draftReasonNote" style="line-height:1.55;"></p>
+      <div class="field full">
+        <label>Reason for the additional draft</label>
+        <textarea id="draftReason" rows="3" placeholder="e.g. Computation revised after the client corrected June overtime"></textarea>
+      </div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="draftReasonOverlay">Cancel</button>
+        <button class="btn" onclick="confirmDraftReason()">Save additional draft</button>
       </div>
     </footer>
   </div>
@@ -3190,7 +3271,210 @@ function draftTotals(rec){
   const otherNT = Math.max(0, gross - (mweBasic + mweOt + thirteen + demin + contrib) - taxable);
   return { gross, mweBasic, mweOt, thirteen, demin, contrib, taxable, tax, otherNT };
 }
-window.openDraft = function(p){ wpDraftPeriod = p; render(); };
+/* line definitions shared by the editor, the A4 popup, and the PDF: [no, label, key, kind] — kind 1 = strong, 2 = section header */
+const DRAFT_LINES = [
+  ["14","Total Amount of Compensation","l14",1],
+  ["","LESS: NON-TAXABLE / EXEMPT COMPENSATION",null,2],
+  ["15A","Statutory Minimum Wage (MWEs)","l15A",0],
+  ["15B","Holiday Pay, Overtime Pay, Night Shift Differential, Hazard Pay (MWEs)","l15B",0],
+  ["15C","13th Month Pay and Other Benefits","l15C",0],
+  ["15D","De Minimis Benefits","l15D",0],
+  ["15E","SSS, GSIS, PHIC, HDMF Mandatory Contributions and Union Dues","l15E",0],
+  ["15F","Other Non-Taxable Compensation","l15F",0],
+  ["","Total Non-Taxable / Exempt Compensation","l15T",1],
+  ["16","Total Taxable Compensation","l16",1],
+  ["17","Tax Required to be Withheld","l17",1],
+  ["18","Add/(Less): Adjustment of Taxes Withheld from Previous Month(s)","l18",0],
+  ["19","Other Payments Made / Tax Paid in Previously Filed Return, if amended","l19",0],
+  ["20","Total Taxes Withheld for Remittance","l20",1],
+  ["","ADD: PENALTIES (only if filing after the deadline)",null,2],
+  ["21","Surcharge","l21",0],
+  ["22","Interest","l22",0],
+  ["23","Compromise","l23",0],
+  ["24","Total Penalties","l24",0],
+  ["25","TOTAL AMOUNT STILL DUE / (OVERREMITTANCE)","l25",1]
+];
+function buildDraftData(c, period){
+  const byP = (c.wtcRecords||[]).filter(r=>r.period===period);
+  if(!byP.length) return null;
+  const rec = byP.reduce((a,b)=> b.version > a.version ? b : a);
+  const t = draftTotals(rec);
+  const d = ((c.wtcDrafts||{})[period]) || {};
+  const num = k => wtcNum(d[k]);
+  const l18 = num("adj"), l19 = num("other");
+  const l20 = t.tax + l18 - l19;
+  const l21 = num("surcharge"), l22 = num("interest"), l23 = num("compromise");
+  const l24 = l21 + l22 + l23;
+  return { period, basedOn: rec.version, lines: {
+    l14:t.gross, l15A:t.mweBasic, l15B:t.mweOt, l15C:t.thirteen, l15D:t.demin, l15E:t.contrib, l15F:t.otherNT,
+    l15T: t.mweBasic + t.mweOt + t.thirteen + t.demin + t.contrib + t.otherNT,
+    l16:t.taxable, l17:t.tax, l18, l19, l20, l21, l22, l23, l24, l25: l20 + l24 } };
+}
+let draftCur = null;                                   // context of the open A4 popup
+window.openDraftAdd = function(){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const recs = c.wtcRecords || [];
+  if(!recs.length){ toast("Record a Withholding Tax Computation first"); return; }
+  const byPeriod = {};
+  recs.forEach(r=>{ if(!byPeriod[r.period] || r.version > byPeriod[r.period].version) byPeriod[r.period] = r; });
+  $("draftPickBody").innerHTML = Object.keys(byPeriod).sort().reverse().map(p=>{
+    const r = byPeriod[p]; const [py, pm] = p.split("-");
+    const has = (c.draftRecords||[]).filter(x=>x.period===p).length;
+    return `
+    <button type="button" class="ct-link" style="display:flex; width:100%; gap:10px; align-items:center;" onclick="pickDraftPeriod('${p}')">
+      <b style="min-width:130px;">${MONTHS[+pm-1]} ${py}</b>
+      <span style="color:var(--muted); font-size:.8rem;">computation v${r.version} · tax withheld ${wtcFmt(draftTotals(r).tax)}</span>
+      ${has ? `<span class="pill" style="margin-left:auto;">draft v${has} exists — reason required</span>` : ""}
+    </button>`;
+  }).join("");
+  resetModalPosition("draftPickOverlay");
+  $("draftPickOverlay").classList.add("open");
+};
+window.pickDraftPeriod = function(p){ closeOverlays(); wpDraftPeriod = p; render(); };
+window.openDraftPreview = function(savedId){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  let data, saved = null;
+  if(savedId){
+    saved = (c.draftRecords||[]).find(r=>r.id===savedId);
+    if(!saved) return;
+    data = { period: saved.period, basedOn: saved.basedOn, lines: saved.lines };
+  } else {
+    data = buildDraftData(c, wpDraftPeriod);
+    if(!data) return;
+  }
+  draftCur = { data, saved, client: c };
+  const [py, pm] = data.period.split("-");
+  const rows = DRAFT_LINES.map(L=>{
+    if(L[3] === 2) return `<tr class="a4-sec"><td></td><td colspan="2">${L[1]}</td></tr>`;
+    return `<tr class="${L[3] ? "a4-strong" : ""}"><td class="ta-c">${L[0]}</td><td>${L[1]}</td><td class="ta-r">${wtcFmt(data.lines[L[2]]||0)}</td></tr>`;
+  }).join("");
+  const prep = saved ? saved.preparer : (c.preparer||"");
+  const rev = saved ? saved.reviewer : (c.reviewer||"");
+  $("draftA4Body").innerHTML = `
+    <div class="a4-head">
+      <img src="assets/logo-mark.png" alt="" onerror="this.style.display='none'">
+      <div>
+        <div class="a4-firm">MORA, SANCHEZ, MEÑOZA AND ASSOCIATES</div>
+        <div class="a4-firmsub">MSMA Tax Compliance System · Working Paper</div>
+      </div>
+    </div>
+    <div class="a4-title">DRAFT RETURN — BIR FORM 1601-C</div>
+    <div class="a4-titlesub">Monthly Remittance Return of Income Taxes Withheld on Compensation</div>
+    <table class="a4-info"><tbody>
+      <tr><td>Withholding Agent</td><td>${escapeHtml(c.name)}</td><td>TIN</td><td>${escapeHtml(c.tin||"—")}</td></tr>
+      <tr><td>Return Period</td><td>${MONTHS[+pm-1]} ${py}</td><td>Basis</td><td>Withholding Tax Computation v${data.basedOn}</td></tr>
+      <tr><td>Draft Version</td><td>${saved ? "v"+saved.version : `v${((c.draftRecords||[]).filter(r=>r.period===data.period).length)+1} — unsaved preview`}</td>
+      <td>Prepared</td><td>${fmtDateMDY((saved ? String(saved.savedAt) : new Date().toISOString()).slice(0,10))} · ${escapeHtml((saved && saved.savedBy) || cluster)} Cluster</td></tr>
+      ${saved && saved.remarks ? `<tr><td>Remarks</td><td colspan="3">${escapeHtml(saved.remarks)}</td></tr>` : ""}
+    </tbody></table>
+    <table class="a4-lines">
+      <thead><tr><th style="width:54px;">Line</th><th>Particulars</th><th class="ta-r" style="width:150px;">Amount (₱)</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="a4-sign">
+      <div><div class="sig-name">${escapeHtml(prep.toUpperCase()) || "&nbsp;"}</div><div class="sig-line"></div><div class="sig-role">Prepared by · Junior Associate In-charge</div></div>
+      <div><div class="sig-name">${escapeHtml(rev.toUpperCase()) || "&nbsp;"}</div><div class="sig-line"></div><div class="sig-role">Reviewed by · Senior Associate In-charge / Team Leader</div></div>
+    </div>
+    <div class="a4-foot">System-generated draft for internal review and approval — not for filing · Mora, Sanchez, Meñoza and Associates</div>`;
+  $("draftSaveBtn").style.display = saved ? "none" : "";
+  $("draftA4Overlay").classList.add("open");
+};
+window.saveDraftForApproval = function(){
+  if(!draftCur || draftCur.saved) return;
+  const c = draftCur.client;
+  const existing = (c.draftRecords||[]).filter(r=>r.period===draftCur.data.period);
+  if(existing.length){
+    const [py, pm] = draftCur.data.period.split("-");
+    $("draftReason").value = "";
+    $("draftReasonNote").innerHTML = `<b>${MONTHS[+pm-1]} ${py}</b> already has <b>${existing.length} saved draft${existing.length===1?"":"s"}</b> for <b>${escapeHtml(c.name)}</b>. Only one draft per month is allowed — saving another requires a reason, and it will be recorded as <b>version ${existing.length + 1}</b>.`;
+    resetModalPosition("draftReasonOverlay");
+    $("draftReasonOverlay").classList.add("open");
+    return;
+  }
+  commitDraft("");
+};
+function commitDraft(remarks){
+  const c = draftCur.client;
+  if(!c.draftRecords) c.draftRecords = [];
+  const existing = c.draftRecords.filter(r=>r.period===draftCur.data.period);
+  c.draftRecords.push({
+    id: "d" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    period: draftCur.data.period, version: existing.length + 1, basedOn: draftCur.data.basedOn,
+    savedAt: new Date().toISOString(), savedBy: cluster, remarks,
+    preparer: c.preparer||"", reviewer: c.reviewer||"", lines: draftCur.data.lines
+  });
+  save(); closeOverlays();
+  wpDraftPeriod = null; render();
+  toast(`Draft return saved for approval — version ${existing.length + 1}`);
+}
+window.confirmDraftReason = function(){
+  const r = $("draftReason").value.trim();
+  if(!r){ toast("A reason is required for an additional draft this month"); $("draftReason").focus(); return; }
+  commitDraft(r);
+};
+window.draftReturnPdf = async function(){
+  if(!draftCur) return;
+  try{ await loadJsPDF(); }catch(e){ toast("Couldn't load the PDF engine — check your internet connection"); return; }
+  const doc = new window.jspdf.jsPDF("p","mm","a4");
+  const c = draftCur.client, data = draftCur.data, saved = draftCur.saved;
+  const [py, pm] = data.period.split("-");
+  try{
+    const img = new Image(); img.src = "assets/logo-mark.png";
+    await new Promise((res, rej)=>{ img.onload = res; img.onerror = rej; });
+    const cv = document.createElement("canvas"); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    cv.getContext("2d").drawImage(img, 0, 0);
+    doc.addImage(cv.toDataURL("image/png"), "PNG", 14, 10.5, 14, 14);
+  }catch(e){ /* letterhead falls back to text only */ }
+  doc.setFont(undefined,"bold"); doc.setFontSize(11.5); doc.setTextColor(15,23,42);
+  doc.text("MORA, SANCHEZ, MEÑOZA AND ASSOCIATES", 31, 16.5);
+  doc.setFont(undefined,"normal"); doc.setFontSize(8); doc.setTextColor(120);
+  doc.text("MSMA Tax Compliance System · Working Paper", 31, 21.5);
+  doc.setDrawColor(15,23,42); doc.setLineWidth(.6); doc.line(14, 27.5, 196, 27.5);
+  doc.setTextColor(15,23,42); doc.setFontSize(12.5); doc.setFont(undefined,"bold");
+  doc.text("DRAFT RETURN — BIR FORM 1601-C", 105, 36, {align:"center"});
+  doc.setFont(undefined,"normal"); doc.setFontSize(8.5); doc.setTextColor(110);
+  doc.text("Monthly Remittance Return of Income Taxes Withheld on Compensation", 105, 41, {align:"center"});
+  doc.autoTable({
+    startY: 46, theme:"plain", styles:{fontSize:8.5, cellPadding:1.2, textColor:[15,23,42]},
+    body:[
+      ["Withholding Agent:", c.name, "TIN:", c.tin||"—"],
+      ["Return Period:", `${MONTHS[+pm-1]} ${py}`, "Basis:", `Withholding Tax Computation v${data.basedOn}`],
+      ["Draft Version:", saved ? `v${saved.version}` : "Unsaved preview", "Prepared:", `${fmtDateMDY((saved ? String(saved.savedAt) : new Date().toISOString()).slice(0,10))} · ${(saved && saved.savedBy) || cluster} Cluster`]
+    ].concat(saved && saved.remarks ? [["Remarks:", {content: saved.remarks, colSpan:3}]] : []),
+    columnStyles:{ 0:{fontStyle:"bold", cellWidth:36, textColor:[110,110,110]}, 2:{fontStyle:"bold", cellWidth:20, textColor:[110,110,110]} }
+  });
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 3,
+    head:[["Line","Particulars","Amount (PHP)"]],
+    body: DRAFT_LINES.map(L=> L[3] === 2
+      ? [{content:L[1], colSpan:3, styles:{fontStyle:"bold", fontSize:7, textColor:[110,110,110], fillColor:[248,250,252]}}]
+      : [L[0], L[1], wtcFmt(data.lines[L[2]]||0)]),
+    styles:{fontSize:8.5, cellPadding:2, lineColor:[226,232,240], lineWidth:.2, textColor:[15,23,42]},
+    headStyles:{fillColor:[15,23,42], fontSize:7.5},
+    columnStyles:{ 0:{cellWidth:16, halign:"center"}, 2:{cellWidth:38, halign:"right"} },
+    didParseCell: cell=>{
+      if(cell.section === "body" && DRAFT_LINES[cell.row.index] && DRAFT_LINES[cell.row.index][3] === 1){
+        cell.cell.styles.fontStyle = "bold"; cell.cell.styles.fillColor = [248,250,252];
+      }
+    }
+  });
+  let y = doc.lastAutoTable.finalY + 22;
+  if(y > 258){ doc.addPage(); y = 46; }
+  const prep = ((saved ? saved.preparer : c.preparer)||"").toUpperCase();
+  const rev = ((saved ? saved.reviewer : c.reviewer)||"").toUpperCase();
+  doc.setFontSize(9); doc.setTextColor(15,23,42); doc.setFont(undefined,"bold");
+  if(prep) doc.text(prep, 52, y - 2, {align:"center"});
+  if(rev) doc.text(rev, 158, y - 2, {align:"center"});
+  doc.setLineWidth(.35); doc.line(22, y, 82, y); doc.line(128, y, 188, y);
+  doc.setFont(undefined,"normal"); doc.setFontSize(7.5); doc.setTextColor(110);
+  doc.text("Prepared by · Junior Associate In-charge", 52, y + 4.5, {align:"center"});
+  doc.text("Reviewed by · Senior Associate In-charge / Team Leader", 158, y + 4.5, {align:"center"});
+  doc.setFontSize(7);
+  doc.text("System-generated draft for internal review and approval — not for filing · Mora, Sanchez, Meñoza and Associates", 105, 288, {align:"center"});
+  doc.save(`${c.name.replace(/[^\w ]+/g,"").trim().replace(/ +/g,"_")}_1601C_Draft_${data.period}${saved ? "_v"+saved.version : ""}.pdf`);
+};
 window.setDraftField = function(key, el){
   const c = db.clients.find(x=>x.id===wpClient);
   if(!c || !wpDraftPeriod) return;
@@ -3209,34 +3493,38 @@ function renderWpDraft(R, c){
     </div>`;
   const recs = c.wtcRecords || [];
 
-  /* landing: pick the period to draft */
+  /* landing: saved drafts + add */
   if(!wpDraftPeriod){
-    if(!recs.length) return head + `
-      <div class="card"><div class="attn-empty" style="min-height:190px;">
-        <div>No recorded Withholding Tax Computation yet for <b>${escapeHtml(c.name)}</b>.<br>The draft return is built from a recorded computation — record one first.</div>
-        <button class="btn" style="margin-top:14px;" onclick="openWpSection('computation')">Open Withholding Tax Computation</button>
-      </div></div>`;
-    const byPeriod = {};
-    recs.forEach(r=>{ if(!byPeriod[r.period] || r.version > byPeriod[r.period].version) byPeriod[r.period] = r; });
-    const periods = Object.keys(byPeriod).sort().reverse();
-    return head + `
+    const drafts = (c.draftRecords||[]).slice().sort((a,b)=> String(b.savedAt).localeCompare(String(a.savedAt)));
+    const listCard = drafts.length ? `
       <div class="card">
-        <div class="card-title">Periods with a recorded computation <span class="pill">${periods.length}</span></div>
+        <div class="card-title">Saved draft returns <span class="pill">${drafts.length}</span></div>
+        <div class="table-scroll">
         <table>
-          <thead><tr><th>Period</th><th class="ta-c">Based on</th><th>Saved</th><th class="ta-r">Tax withheld</th><th></th></tr></thead>
-          <tbody>${periods.map(p=>{
-            const r = byPeriod[p]; const [py, pm] = p.split("-");
+          <thead><tr><th>Period</th><th class="ta-c">Version</th><th class="ta-c">Based on</th><th>Saved</th><th>By</th><th class="ta-r">Amount due</th><th>Remarks</th></tr></thead>
+          <tbody>${drafts.map(d=>{
+            const [dy, dm] = String(d.period).split("-");
             return `
-            <tr class="crow" onclick="openDraft('${p}')">
-              <td><div class="cname">${MONTHS[+pm-1]} ${py}</div></td>
-              <td class="due ta-c">v${r.version}</td>
-              <td class="due">${fmtDateMDY(String(r.savedAt).slice(0,10))}</td>
-              <td class="due ta-r">${wtcFmt(draftTotals(r).tax)}</td>
-              <td class="ta-r"><span class="wp-open">Draft the return →</span></td>
+            <tr class="crow" onclick="openDraftPreview('${d.id}')">
+              <td><div class="cname">${MONTHS[+dm-1]} ${dy}</div></td>
+              <td class="due ta-c">v${d.version}</td>
+              <td class="due ta-c">WTC v${d.basedOn}</td>
+              <td class="due">${fmtDateMDY(String(d.savedAt).slice(0,10))}</td>
+              <td class="due">${escapeHtml(d.savedBy||"—")}</td>
+              <td class="due ta-r">${wtcFmt((d.lines&&d.lines.l25)||0)}</td>
+              <td style="max-width:260px; white-space:normal;">${escapeHtml(d.remarks||"—")}</td>
             </tr>`;
           }).join("")}</tbody>
         </table>
-      </div>`;
+        </div>
+      </div>` : "";
+    return head + `
+      <div class="toolbar">
+        <div style="flex:1; font-size:.82rem; color:var(--muted);">${drafts.length
+          ? "Saved draft returns — click a row to open the A4 draft."
+          : `No draft returns yet for <b>${escapeHtml(c.name)}</b> — click <b>+ Add draft return</b> and pick a recorded computation.`}</div>
+        <button class="btn" onclick="openDraftAdd()">+ Add draft return</button>
+      </div>` + listCard;
   }
 
   /* the draft form itself — always from the latest recorded version of the period */
@@ -3288,8 +3576,9 @@ function renderWpDraft(R, c){
       </table>
     </div>
     <div class="toolbar" style="margin-top:4px;">
-      <div style="flex:1; font-size:.82rem; color:var(--muted);">The draft recomputes automatically whenever a newer version of the ${MONTHS[+pm-1]} ${py} computation is recorded.</div>
-      <button class="btn ghost" onclick="wpDraftPeriod=null; render();">← Back to periods</button>
+      <div style="flex:1; font-size:.82rem; color:var(--muted);">Lines 14–17 come from computation v${rec.version}; adjustments and penalties save automatically.</div>
+      <button class="btn ghost" onclick="wpDraftPeriod=null; render();">← Back to drafts</button>
+      <button class="btn" onclick="openDraftPreview()">Preview &amp; save (A4) →</button>
     </div>`;
 }
 
