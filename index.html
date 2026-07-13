@@ -1309,25 +1309,6 @@
   </div>
 </div>
 
-<!-- Add draft return: pick the recorded computation -->
-<div class="overlay" id="draftPickOverlay">
-  <div class="modal" role="dialog" aria-modal="true">
-    <header>
-      <h2>Add draft return</h2>
-      <button class="xclose" data-close="draftPickOverlay">✕</button>
-    </header>
-    <div class="body">
-      <p class="imp-cols" style="line-height:1.5;">Select the recorded computation to draft from. Only <b>one draft per month</b> is allowed — an additional draft for the same month requires a reason.</p>
-      <div id="draftPickBody" style="grid-column:1/-1;"></div>
-    </div>
-    <footer>
-      <div class="right">
-        <button class="btn ghost" data-close="draftPickOverlay">Cancel</button>
-      </div>
-    </footer>
-  </div>
-</div>
-
 <!-- Additional draft for a month that already has one: reason required -->
 <div class="overlay" id="draftReasonOverlay">
   <div class="modal" role="dialog" aria-modal="true">
@@ -1739,6 +1720,7 @@ let wpWtcEditReason = null;      // reason given when editing a recorded computa
 let wpWtcEditPeriod = null;      // period of the record being edited (prefills the save popup)
 let wpWtcEditRecId = null;       // record targeted by the edit-reason popup
 let wpDraftPeriod = null;        // period whose 1601-C draft is open
+let wpDraftView = null;          // "summary" = the monthly summary work area
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1948,7 +1930,7 @@ window.backToWpCompanies = function(){ wpClient = null; wpSection = null; render
 window.openWpSection = function(key){
   wpSection = key;
   if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpWtcViewRec = null; wpWtcEditReason = null; wpWtcEditPeriod = null; wpWtcEditRecId = null; }
-  if(key === "draft") wpDraftPeriod = null;
+  if(key === "draft"){ wpDraftPeriod = null; wpDraftView = null; }
   render();
   /* the payroll prompt only auto-opens from the pipeline's Data Received hook (goToWtcComputation);
      plain navigation lands on the recorded-computations list */
@@ -3337,24 +3319,11 @@ let draftCur = null;                                   // context of the open A4
 window.openDraftAdd = function(){
   const c = db.clients.find(x=>x.id===wpClient);
   if(!c) return;
-  const recs = c.wtcRecords || [];
-  if(!recs.length){ toast("Record a Withholding Tax Computation first"); return; }
-  const byPeriod = {};
-  recs.forEach(r=>{ if(!byPeriod[r.period] || r.version > byPeriod[r.period].version) byPeriod[r.period] = r; });
-  $("draftPickBody").innerHTML = Object.keys(byPeriod).sort().reverse().map(p=>{
-    const r = byPeriod[p]; const [py, pm] = p.split("-");
-    const has = (c.draftRecords||[]).filter(x=>x.period===p).length;
-    return `
-    <button type="button" class="ct-link" style="display:flex; width:100%; gap:10px; align-items:center;" onclick="pickDraftPeriod('${p}')">
-      <b style="min-width:130px;">${MONTHS[+pm-1]} ${py}</b>
-      <span style="color:var(--muted); font-size:.8rem;">computation v${r.version} · tax withheld ${wtcFmt(draftTotals(r).tax)}</span>
-      ${has ? `<span class="pill" style="margin-left:auto;">draft v${has} exists — reason required</span>` : ""}
-    </button>`;
-  }).join("");
-  resetModalPosition("draftPickOverlay");
-  $("draftPickOverlay").classList.add("open");
+  if(!(c.wtcRecords||[]).length){ toast("Record a Withholding Tax Computation first"); return; }
+  wpDraftView = "summary";
+  render();
 };
-window.pickDraftPeriod = function(p){ closeOverlays(); wpDraftPeriod = p; render(); };
+window.draftMonth = function(p){ wpDraftPeriod = p; openDraftPreview(); };
 window.openDraftPreview = function(savedId){
   const c = db.clients.find(x=>x.id===wpClient);
   if(!c) return;
@@ -3636,7 +3605,7 @@ function renderWpDraft(R, c){
   const recs = c.wtcRecords || [];
 
   /* landing: saved drafts + add */
-  if(!wpDraftPeriod){
+  if(wpDraftView !== "summary"){
     const drafts = (c.draftRecords||[]).slice().sort((a,b)=> String(b.savedAt).localeCompare(String(a.savedAt)));
     const listCard = drafts.length ? `
       <div class="card">
@@ -3664,71 +3633,76 @@ function renderWpDraft(R, c){
       <div class="toolbar">
         <div style="flex:1; font-size:.82rem; color:var(--muted);">${drafts.length
           ? "Saved draft returns — click a row to open the A4 draft."
-          : `No draft returns yet for <b>${escapeHtml(c.name)}</b> — click <b>+ Add draft return</b> and pick a recorded computation.`}</div>
+          : `No draft returns yet for <b>${escapeHtml(c.name)}</b> — click <b>+ Add draft return</b> to open the monthly summary.`}</div>
         <button class="btn" onclick="openDraftAdd()">+ Add draft return</button>
       </div>` + listCard;
   }
 
-  /* the draft form itself — always from the latest recorded version of the period */
-  const byP = recs.filter(r=>r.period===wpDraftPeriod);
-  if(!byP.length){ wpDraftPeriod = null; return renderWpDraft(R, c); }
-  const rec = byP.reduce((a,b)=> b.version > a.version ? b : a);
-  const t = draftTotals(rec);
-  const d = ((c.wtcDrafts||{})[wpDraftPeriod]) || {};
-  const num = k => wtcNum(d[k]);
-  const totalExempt = t.mweBasic + t.mweOt + t.thirteen + t.demin + t.contrib + t.otherNT;
-  const l24n = t.taxable - t.le250;
-  const l27v = t.tax + num("adj");                     // 27 = 25 + 26
-  const l30v = num("other") + num("other2");           // 30 = 28 + 29
-  const l31v = l27v - l30v;                            // 31 = 27 − 30
-  const totalPen = num("surcharge") + num("interest") + num("compromise");
-  const l36v = l31v + totalPen;                        // 36 = 31 + 35
-  const [py, pm] = wpDraftPeriod.split("-");
-  const roLine = (no, label, val, strong) => `
-    <tr class="${strong?"draft-strong":""}"><td class="due ta-c" style="width:64px;">${no}</td><td>${label}</td>
-    <td class="due ta-r" style="width:200px;">${wtcFmt(val)}</td></tr>`;
-  const edLine = (no, label, key) => `
-    <tr><td class="due ta-c" style="width:64px;">${no}</td><td>${label}</td>
-    <td class="ta-r" style="width:200px; padding:3px 5px;"><input class="wtc-cell ta-r" style="width:170px;" value="${escapeHtml(d[key]||"")}" placeholder="0.00" onchange="setDraftField('${key}', this)"></td></tr>`;
+  /* monthly summary — one row per recorded month, like the firm's Excel working paper */
+  const byPeriod = {};
+  recs.forEach(r=>{ if(!byPeriod[r.period] || r.version > byPeriod[r.period].version) byPeriod[r.period] = r; });
+  const periods = Object.keys(byPeriod).sort();
+  const NB = PAYROLL_HEADERS.length;
+  const F = v => Math.abs(v) < 0.005 ? `<span style="color:var(--muted);">—</span>` : wtcFmt(v);
+  const rows = periods.map(p=>{
+    const r = byPeriod[p];
+    const t = draftTotals(r);
+    const perClient = r.rows.reduce((a,row)=> a + Math.abs(wtcNum(row[25])), 0);   // W/TAX per payroll
+    const totalNT = t.mweBasic + t.mweOt + t.thirteen + t.demin + t.contrib + t.otherNT;
+    const variance = perClient - t.tax;
+    const drafts = (c.draftRecords||[]).filter(x=>x.period===p).length;
+    const [py, pm] = p.split("-");
+    return `
+    <tr class="crow" onclick="draftMonth('${p}')">
+      <td><div class="cname">${MONTHS[+pm-1]} ${py}</div><div class="cmeta">WTC v${r.version}${drafts?` · draft v${drafts} saved`:""}</div></td>
+      <td class="due ta-r">${F(t.gross)}</td>
+      <td class="due ta-r">${F(t.mweBasic)}</td>
+      <td class="due ta-r">${F(t.mweOt)}</td>
+      <td class="due ta-r">${F(t.thirteen)}</td>
+      <td class="due ta-r">${F(t.demin)}</td>
+      <td class="due ta-r">${F(t.contrib)}</td>
+      <td class="due ta-r">${F(t.otherNT)}</td>
+      <td class="due ta-r" style="font-weight:700;">${F(totalNT)}</td>
+      <td class="due ta-r" style="font-weight:700;">${F(t.taxable)}</td>
+      <td class="due ta-r">${F(t.le250)}</td>
+      <td class="due ta-r" style="font-weight:700;">${F(t.taxable - t.le250)}</td>
+      <td class="due ta-r">${F(perClient)}</td>
+      <td class="due ta-r" style="font-weight:700;">${F(t.tax)}</td>
+      <td class="due ta-r ${Math.abs(variance)>0.009?"wtc-warn":""}" style="${Math.abs(variance)>0.009?"font-weight:700;":""}">${F(variance)}</td>
+      <td class="ta-r"><span class="wp-open">Draft →</span></td>
+    </tr>`;
+  }).join("");
   return head + `
     <div class="card">
-      <div class="card-title">BIR Form 1601-C — ${MONTHS[+pm-1]} ${py} <span class="pill">from computation v${rec.version}</span></div>
-      <div class="wtc-note">Monthly Remittance Return of Income Taxes Withheld on Compensation · <b>${escapeHtml(c.name)}</b> · TIN ${escapeHtml(c.tin||"—")}<br>
-      Lines 14–17 are pulled from the recorded computation; adjustments and penalties are encoded below and save automatically.</div>
-      <table>
-        <tbody>
-          ${roLine("14","Total Amount of Compensation", t.gross, true)}
-          <tr class="draft-sec"><td></td><td colspan="2">LESS: NON-TAXABLE COMPENSATION</td></tr>
-          ${roLine("15","Statutory Minimum Wage (MWEs)", t.mweBasic)}
-          ${roLine("16","Holiday Pay, Overtime Pay, Night Shift Differential Pay, Hazard Pay (MWEs)", t.mweOt)}
-          ${roLine("17","13th Month Pay and Other Benefits", t.thirteen)}
-          ${roLine("18","De Minimis Benefits", t.demin)}
-          ${roLine("19","SSS, GSIS, PHIC, HDMF Mandatory Contributions and Union Dues (employee's share only)", t.contrib)}
-          ${roLine("20","Other Non-Taxable Compensation", t.otherNT)}
-          ${roLine("21","Total Non-Taxable Compensation (Sum of Items 15 to 20)", totalExempt, true)}
-          ${roLine("22","Total Taxable Compensation (Item 14 Less Item 21)", t.taxable, true)}
-          ${roLine("23","Less: Taxable compensation not subject to withholding tax (for employees, other than MWEs, receiving P250,000 and below for the year)", t.le250)}
-          ${roLine("24","Net Taxable Compensation (Item 22 Less Item 23)", l24n, true)}
-          ${roLine("25","Total Taxes Withheld", t.tax, true)}
-          ${edLine("26","Add/(Less): Adjustment of Taxes Withheld from Previous Month/s","adj")}
-          ${roLine("27","Tax Required to be Withheld for Remittance (Sum of Items 25 and 26)", l27v, true)}
-          ${edLine("28","Less: Tax Remitted in Return Previously Filed, if this is an amended return","other")}
-          ${edLine("29","Other Remittances Made","other2")}
-          ${roLine("30","Total Tax Remittances Made (Sum of Items 28 and 29)", l30v)}
-          ${roLine("31","Tax Still Due/(Over-remittance) (Item 27 Less Item 30)", l31v, true)}
-          <tr class="draft-sec"><td></td><td colspan="2">ADD: PENALTIES (only if filing after the deadline)</td></tr>
-          ${edLine("32","Surcharge","surcharge")}
-          ${edLine("33","Interest","interest")}
-          ${edLine("34","Compromise","compromise")}
-          ${roLine("35","Total Penalties (Sum of Items 32 to 34)", totalPen)}
-          ${roLine("36","TOTAL AMOUNT STILL DUE/(Over-remittance) (Sum of Items 31 and 35)", l36v, true)}
-        </tbody>
+      <div class="card-title">Monthly summary <span class="pill">${periods.length} month${periods.length===1?"":"s"}</span></div>
+      <div class="wtc-note">One row per recorded computation. <b>Per client</b> is the W/TAX in the payroll data; <b>Should be</b> is the system computation; <b>Variance</b> = per client − should be (overstatement / understatement). Click a month to open its draft return.</div>
+      <div class="wtc-scroll" style="max-height:64vh;">
+      <table style="font-size:.8rem;">
+        <thead><tr>
+          <th>Month</th>
+          <th class="ta-r">Total Compensation</th>
+          <th class="ta-r">MWE</th>
+          <th class="ta-r">HONSHA (MWEs)</th>
+          <th class="ta-r">13th Month & OB</th>
+          <th class="ta-r">De Minimis</th>
+          <th class="ta-r">Gov't Stats</th>
+          <th class="ta-r">Other Non-Taxable</th>
+          <th class="ta-r">Total Non-Taxable</th>
+          <th class="ta-r">Taxable</th>
+          <th class="ta-r">≤250K Not Subject</th>
+          <th class="ta-r">Net Taxable</th>
+          <th class="ta-r">Tax — Per Client</th>
+          <th class="ta-r">Should Be</th>
+          <th class="ta-r">Variance</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
       </table>
+      </div>
     </div>
     <div class="toolbar" style="margin-top:4px;">
-      <div style="flex:1; font-size:.82rem; color:var(--muted);">Lines 14–17 come from computation v${rec.version}; adjustments and penalties save automatically.</div>
-      <button class="btn ghost" onclick="wpDraftPeriod=null; render();">← Back to drafts</button>
-      <button class="btn" onclick="openDraftPreview()">Preview &amp; save (A4) →</button>
+      <div style="flex:1;"></div>
+      <button class="btn ghost" onclick="wpDraftView=null; render();">← Back to drafts</button>
     </div>`;
 }
 
