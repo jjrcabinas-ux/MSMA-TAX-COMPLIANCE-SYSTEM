@@ -1299,8 +1299,8 @@
     <button class="xclose a4-close" data-close="draftA4Overlay">✕</button>
     <div id="draftA4Body"></div>
     <div class="a4-actions">
-      <button class="btn ghost" onclick="birFormPdf()">⬇ Official BIR form (PDF)</button>
-      <button class="btn ghost" onclick="draftReturnPdf()">⬇ Working paper PDF</button>
+      <button class="btn ghost" onclick="draftReturnPdf()" title="Firm letterhead working paper with Prepared by / Reviewed by — for internal files">⬇ Internal copy (working paper)</button>
+      <button class="btn ghost" onclick="birFormPdf()" title="The actual return on the official BIR Form 1601-C — for sending to the client">⬇ Client copy (BIR Form 1601-C)</button>
       <button class="btn" id="draftSaveBtn" onclick="saveDraftForApproval()">Save draft return for approval</button>
     </div>
   </div>
@@ -3559,10 +3559,12 @@ async function buildBirFormPdf(){
     [282,   L.l24],                                    // 35 Total penalties
     [266,   L.l25]                                     // 36 TOTAL AMOUNT STILL DUE / (Overremittance)
   ].forEach(r=> amt(r[0], r[1]||0));
-  /* DRAFT watermark on every page */
-  doc.getPages().forEach(pg=>{
-    pg.drawText("DRAFT — FOR REVIEW", { x: 70, y: 260, size: 56, font: bold, color: rgb(.45,.52,.66), opacity: .16, rotate: degrees(38) });
-  });
+  /* client copy of a SAVED draft is the actual return — clean; unsaved previews stay watermarked */
+  if(!draftCur.saved){
+    doc.getPages().forEach(pg=>{
+      pg.drawText("DRAFT — FOR REVIEW", { x: 70, y: 260, size: 56, font: bold, color: rgb(.45,.52,.66), opacity: .16, rotate: degrees(38) });
+    });
+  }
   return doc.save();
 }
 window.birFormPdf = async function(){
