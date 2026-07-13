@@ -1029,6 +1029,7 @@
     </div>
 
     <footer>
+      <button class="btn ghost" id="rqPayrollTpl" style="display:none;" onclick="downloadPayrollTemplate()">⬇ Standard payroll template</button>
       <div class="left" id="rqEmailActions" style="display:none;">
         <button class="btn ghost" id="rqCopySubject">Copy subject</button>
         <button class="btn ghost" id="rqCopyBody">Copy body</button>
@@ -2347,6 +2348,30 @@ window.downloadEmpTemplate = async function(){
   XLSX.utils.book_append_sheet(wb, ws, "Employees");
   XLSX.writeFile(wb, "MSMA_Employee_Masterlist_Template.xlsx");
 };
+/* standard payroll data template (downloadable from the RQ popup and the WTC verification) */
+window.downloadPayrollTemplate = async function(){
+  try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
+  const headers = [
+    "MONTH END","FROM","TO",
+    "LAST NAME","FIRST NAME","MIDDLE NAME","FULL NAME","TIN",
+    "DAILY RATE","NO OF DAYS","BASIC PAY","OVERTIME PAY","HOLIDAY PAY","ALLOWANCES",
+    "13TH MONTH PAY","OTHER INCENTIVES",
+    "LATE","ABSENT","TARDINESS","LEAVE WITHOUT PAY",
+    "GROSS PAY","SSS","HDMF","PHIC","W/TAX",
+    "SSS LOAN","HDMF LOAN","PERSONAL LOAN","OTHER DEDUCTION","NET PAY"
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([
+    headers,
+    ["06/30/2026","06/01/2026","06/15/2026","DELA CRUZ","JUAN","PROTACIO","JUAN PROTACIO DELA CRUZ","123-456-789-000",
+     1136.36, 11, 12500, 0, 0, 1000, 0, 0, 0, 0, 0, 0, 13500, 562.50, 100, 187.50, 937.50, 0, 0, 0, 0, 11712.50],
+    ["06/30/2026","06/16/2026","06/30/2026","DELA CRUZ","JUAN","PROTACIO","JUAN PROTACIO DELA CRUZ","123-456-789-000",
+     1136.36, 11, 12500, 500, 0, 1000, 0, 0, 150, 0, 0, 0, 13850, 562.50, 100, 187.50, 937.50, 0, 0, 0, 0, 12062.50]
+  ]);
+  ws["!cols"] = headers.map(h=>({ wch: Math.max(10, Math.min(24, h.length + 4)) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Payroll");
+  XLSX.writeFile(wb, "MSMA_Standard_Payroll_Template.xlsx");
+};
 window.importEmployees = function(){
   resetModalPosition("impOverlay");
   $("impOverlay").classList.add("open");
@@ -2483,7 +2508,10 @@ function renderWpComputation(R, c){
     <div class="card"><div class="attn-empty" style="min-height:230px;">
       <div><b>Upload the client's payroll file</b> (.xlsx, .xls, or .csv).<br>The system will check every row against the Employee Masterlist:</div>
       <p class="imp-cols" style="margin-top:12px;">1 · Employee exists in the masterlist&nbsp;&nbsp;&nbsp;2 · TIN matches&nbsp;&nbsp;&nbsp;3 · Daily rate matches</p>
-      <button class="btn" onclick="$('payrollFile').click()">Choose payroll file…</button>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+        <button class="btn ghost" onclick="downloadPayrollTemplate()">⬇ Standard payroll template</button>
+        <button class="btn" onclick="$('payrollFile').click()">Choose payroll file…</button>
+      </div>
       <input type="file" id="payrollFile" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handlePayrollVerify(this)">
     </div></div>`;
 
@@ -2931,6 +2959,7 @@ function openRqModal(ret, clientId){
   $("rqEmail").style.display = "none";
   $("rqEmailActions").style.display = "none";
   $("rqMarkDone").style.display = "none";
+  $("rqPayrollTpl").style.display = (ret === "1601C") ? "" : "none";   // payroll template applies to 1601-C
   // reset to the compact choice view (drop email-mode size + any user resize)
   const rqModal = document.querySelector("#rqOverlay .modal");
   rqModal.classList.remove("rq-expand");
