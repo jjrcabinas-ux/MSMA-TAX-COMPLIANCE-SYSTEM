@@ -658,6 +658,10 @@
   .wtc-scroll thead th.wtc-ic{background:var(--accent-deep); color:#fff;}
   .wtc-scroll td.wtc-ic{background:#eff6ff;}
   .wtc-scroll td.wtc-warn{color:#e2445c; font-weight:600;}
+  /* company-summary popup: stat tiles double as filters */
+  .comp-tile{cursor:pointer; transition:box-shadow .12s, transform .12s;}
+  .comp-tile:hover{box-shadow:0 0 0 2px var(--accent-soft);}
+  .comp-tile.sel{box-shadow:0 0 0 2px var(--accent); transform:translateY(-1px);}
   /* mini pipeline chips on the saved-drafts list */
   .pm-chip{display:inline-flex; align-items:center; font-size:.66rem; font-weight:700; padding:2px 7px; border-radius:4px; background:#00c875; color:#fff; margin-right:4px; letter-spacing:.03em;}
   .pm-chip.next{background:#fff; color:var(--muted); border:1px dashed #c3c6d4;}
@@ -2525,6 +2529,7 @@ function scopeYears(){
 function scopeLabel(scope){ return scope === "M" ? "Monthly returns" : scope === "Q" ? "Quarterly returns" : "All periods"; }
 window.setDashScope = function(v){ dashScope = v; attnExpanded = false; render(); };
 /* Company summary detail: every tracked filing of one client, most urgent first */
+let compDetail = null;                                 // {c, items, filter}
 window.openCompanySummary = function(cid){
   const c = db.clients.find(x=>x.id===cid);
   if(!c) return;
@@ -2545,27 +2550,52 @@ window.openCompanySummary = function(cid){
     });
   });
   items.sort((a,b)=> a.f.rank - b.f.rank || ymdInt(a.dl.file.y, a.dl.file.m, a.dl.file.d) - ymdInt(b.dl.file.y, b.dl.file.m, b.dl.file.d));
+  compDetail = { c, items, filter: null };
+  renderCompDetail();
+  resetModalPosition("compDetailOverlay");
+  $("compDetailOverlay").classList.add("open");
+};
+window.setCompFilter = function(f){
+  if(!compDetail) return;
+  compDetail.filter = compDetail.filter === f ? null : f;   // clicking again clears the filter
+  renderCompDetail();
+};
+function renderCompDetail(){
+  const { c, items, filter } = compDetail;
+  const MATCH = {
+    filed: i => i.f.rank >= 3,
+    prog:  i => i.f.rank < 3,
+    amber: i => i.f.cls === "amber",
+    red:   i => i.f.cls === "red"
+  };
   const stats = { total: items.length, filed:0, prog:0, amber:0, red:0 };
   items.forEach(i=>{
-    if(i.f.rank >= 3) stats.filed++; else stats.prog++;
-    if(i.f.cls === "amber") stats.amber++;
-    if(i.f.cls === "red") stats.red++;
+    if(MATCH.filed(i)) stats.filed++; else stats.prog++;
+    if(MATCH.amber(i)) stats.amber++;
+    if(MATCH.red(i)) stats.red++;
   });
+  const shown = filter ? items.filter(MATCH[filter]) : items;
+  const tile = (key, cls, n, label) => `
+    <div class="stat ${cls} comp-tile ${filter === key ? "sel" : ""}" onclick="setCompFilter(${key ? `'${key}'` : "null"})" title="${key ? "Show only these filings — click again to clear" : "Show all filings"}">
+      <div class="n">${n}</div><div class="l">${label}</div>
+    </div>`;
+  const FILTER_LABEL = { filed:"Filed", prog:"In progress", amber:"Needs follow-up", red:"At risk / overdue" };
   $("compDetailTitle").textContent = c.name;
   $("compDetailBody").innerHTML = `
     <div class="cmeta" style="margin:-4px 0 10px;">TIN ${escapeHtml(c.tin||"—")} · ${escapeHtml(c.preparer||"unassigned")}${c.reviewer?" / "+escapeHtml(c.reviewer):""} · ${escapeHtml(c.channel||"")}</div>
     <div class="stat-row" style="margin-bottom:12px;">
-      <div class="stat"><div class="n">${stats.total}</div><div class="l">Tracked filings</div></div>
-      <div class="stat flag-green"><div class="n">${stats.filed}</div><div class="l">Filed</div></div>
-      <div class="stat"><div class="n">${stats.prog}</div><div class="l">In progress</div></div>
-      <div class="stat ${stats.amber?"flag-amber":""}"><div class="n">${stats.amber}</div><div class="l">Needs follow-up</div></div>
-      <div class="stat ${stats.red?"flag-red":""}"><div class="n">${stats.red}</div><div class="l">At risk / overdue</div></div>
+      ${tile(null, "", stats.total, "Tracked filings")}
+      ${tile("filed", "flag-green", stats.filed, "Filed")}
+      ${tile("prog", "", stats.prog, "In progress")}
+      ${tile("amber", stats.amber ? "flag-amber" : "", stats.amber, "Needs follow-up")}
+      ${tile("red", stats.red ? "flag-red" : "", stats.red, "At risk / overdue")}
     </div>
-    ${items.length ? `
+    ${filter ? `<div class="cmeta" style="margin-bottom:8px;">Showing <b>${shown.length}</b> ${FILTER_LABEL[filter]} filing${shown.length===1?"":"s"} · <a href="#" onclick="event.preventDefault(); setCompFilter(null);" style="color:var(--accent);">clear filter</a></div>` : ""}
+    ${shown.length ? `
     <div class="table-scroll" style="max-height:52vh; overflow-y:auto;">
     <table>
       <thead><tr><th>Return</th><th>Period</th><th>Deadline</th><th>Last step done</th><th>Flag</th></tr></thead>
-      <tbody>${items.map(i=>`
+      <tbody>${shown.map(i=>`
         <tr class="crow" onclick="compJump('${i.ret}','${i.pk}')" title="Open ${RETURNS[i.ret].form} · ${periodLabel(i.ret, i.p)}">
           <td><b>${RETURNS[i.ret].form}</b><div class="cmeta">${escapeHtml(RETURNS[i.ret].name)}</div></td>
           <td class="due">${periodLabel(i.ret, i.p)}</td>
@@ -2574,10 +2604,8 @@ window.openCompanySummary = function(cid){
           <td><span class="flagchip ${i.f.cls}">${i.f.text}</span></td>
         </tr>`).join("")}</tbody>
     </table>
-    </div>` : `<div class="attn-empty" style="min-height:120px;"><div>No tracked filings yet for this company.</div></div>`}`;
-  resetModalPosition("compDetailOverlay");
-  $("compDetailOverlay").classList.add("open");
-};
+    </div>` : `<div class="attn-empty" style="min-height:120px;"><div>${items.length ? "No filings under this filter." : "No tracked filings yet for this company."}</div></div>`}`;
+}
 window.compJump = function(ret, pk){
   closeOverlays();
   periods[ret] = parsePeriodKey(ret, pk);
