@@ -1299,7 +1299,8 @@
     <button class="xclose a4-close" data-close="draftA4Overlay">✕</button>
     <div id="draftA4Body"></div>
     <div class="a4-actions">
-      <button class="btn ghost" onclick="draftReturnPdf()">⬇ Generate PDF</button>
+      <button class="btn ghost" onclick="birFormPdf()">⬇ Official BIR form (PDF)</button>
+      <button class="btn ghost" onclick="draftReturnPdf()">⬇ Working paper PDF</button>
       <button class="btn" id="draftSaveBtn" onclick="saveDraftForApproval()">Save draft return for approval</button>
     </div>
   </div>
@@ -3266,10 +3267,10 @@ function draftTotals(rec){
   const NB = PAYROLL_HEADERS.length;
   const S = i => rec.rows.reduce((a,r)=> a + wtcNum(r[i]), 0);
   const gross = S(NB+5), mweBasic = S(NB+6), mweOt = S(NB+7), thirteen = S(NB+8),
-        demin = S(NB+9), contrib = S(NB+10), taxable = S(NB+12), tax = S(NB+13);
+        demin = S(NB+9), contrib = S(NB+10), le250 = S(NB+11), taxable = S(NB+12), tax = S(NB+13);
   // "other non-taxable" is the plug that makes the form foot: 14 − (15A…15E) − 16
   const otherNT = Math.max(0, gross - (mweBasic + mweOt + thirteen + demin + contrib) - taxable);
-  return { gross, mweBasic, mweOt, thirteen, demin, contrib, taxable, tax, otherNT };
+  return { gross, mweBasic, mweOt, thirteen, demin, contrib, le250, taxable, tax, otherNT };
 }
 /* line definitions shared by the editor, the A4 popup, and the PDF: [no, label, key, kind] — kind 1 = strong, 2 = section header */
 const DRAFT_LINES = [
@@ -3308,7 +3309,8 @@ function buildDraftData(c, period){
   return { period, basedOn: rec.version, lines: {
     l14:t.gross, l15A:t.mweBasic, l15B:t.mweOt, l15C:t.thirteen, l15D:t.demin, l15E:t.contrib, l15F:t.otherNT,
     l15T: t.mweBasic + t.mweOt + t.thirteen + t.demin + t.contrib + t.otherNT,
-    l16:t.taxable, l17:t.tax, l18, l19, l20, l21, l22, l23, l24, l25: l20 + l24 } };
+    l16:t.taxable, l17:t.tax, l18, l19, l20, l21, l22, l23, l24, l25: l20 + l24,
+    le250: t.le250 } };                                // official form line 23 (≤250K not subject to withholding)
 }
 let draftCur = null;                                   // context of the open A4 popup
 window.openDraftAdd = function(){
@@ -3474,6 +3476,106 @@ window.draftReturnPdf = async function(){
   doc.setFontSize(7);
   doc.text("System-generated draft for internal review and approval — not for filing · Mora, Sanchez, Meñoza and Associates", 105, 288, {align:"center"});
   doc.save(`${c.name.replace(/[^\w ]+/g,"").trim().replace(/ +/g,"_")}_1601C_Draft_${data.period}${saved ? "_v"+saved.version : ""}.pdf`);
+};
+/* ---- Official BIR Form 1601-C (Jan 2018): overlay the draft onto the real form ---- */
+let pdfLibPromise = null;
+function loadPdfLib(){
+  if(window.PDFLib) return Promise.resolve();
+  if(!pdfLibPromise){
+    pdfLibPromise = new Promise((res, rej)=>{
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js";
+      s.onload = res; s.onerror = ()=>{ pdfLibPromise = null; rej(new Error("pdf-lib failed")); };
+      document.head.appendChild(s);
+    });
+  }
+  return pdfLibPromise;
+}
+/* builds the filled official form; returns PDF bytes (download handled by birFormPdf).
+   The form pages are pre-rendered JPEGs of the official PDF (assets/forms/1601C_Jan2018.pdf,
+   from bir.gov.ph) — composing images is instant, parsing the 900KB original took ~50s. */
+async function buildBirFormPdf(){
+  await loadPdfLib();
+  const [bg1, bg2] = await Promise.all([
+    fetch("assets/forms/1601C_p1.jpg").then(r=>r.arrayBuffer()),
+    fetch("assets/forms/1601C_p2.jpg").then(r=>r.arrayBuffer())
+  ]);
+  const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
+  const doc = await PDFDocument.create();
+  const img1 = await doc.embedJpg(bg1), img2 = await doc.embedJpg(bg2);
+  const p1 = doc.addPage([612, 936]);
+  p1.drawImage(img1, { x:0, y:0, width:612, height:936 });
+  const p2pg = doc.addPage([612, 936]);
+  p2pg.drawImage(img2, { x:0, y:0, width:612, height:936 });
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const c = draftCur.client, data = draftCur.data, L = data.lines;
+  const [py, pm] = data.period.split("-");
+  const ink = rgb(0.06, 0.09, 0.16);
+  const put = (x, y, s, size, f) => p1.drawText(String(s), { x, y, size: size||8, font: f||font, color: ink });
+  // amounts: integer right-aligned before the form's printed centavo dot (x≈555), centavos after it
+  const amt = (y, v) => {
+    const n = Math.round((+v || 0) * 100);
+    const int = Math.trunc(Math.abs(n)/100).toLocaleString("en-US");
+    const s = n < 0 ? `(${int})` : int;
+    p1.drawText(s, { x: 551 - font.widthOfTextAtSize(s, 8), y, size: 8, font, color: ink });
+    p1.drawText(String(Math.abs(n)%100).padStart(2,"0"), { x: 559, y, size: 8, font, color: ink });
+  };
+  /* Part I — background information */
+  put(58, 810, `${pm} / ${py}`, 9, bold);              // 1 · For the Month
+  put(243.5, 811, "X", 9, bold);                       // 2 · Amended Return? No
+  put(315, 811, "X", 9, bold);                         // 3 · Any Taxes Withheld? Yes
+  const dg = String(c.tin||"").replace(/\D/g,"");
+  if(dg){                                              // 6 · TIN in its four box groups
+    const groups = [dg.slice(0,3), dg.slice(3,6), dg.slice(6,9), dg.slice(9,14) || "000"];
+    [251, 309, 366, 425].forEach((cx,i)=>{
+      if(!groups[i]) return;
+      const s = groups[i].split("").join(" ");
+      put(cx - bold.widthOfTextAtSize(s, 9)/2, 779, s, 9, bold);
+    });
+  }
+  put(33, 756, (c.name||"").toUpperCase(), 8, bold);   // 8 · Registered name
+  if(c.address) put(33, 729, String(c.address).toUpperCase().slice(0,110), 7);   // 9 · Registered address
+  put(460, 695.5, "X", 9, bold);                       // 11 · Category: Private
+  put(231, 660, "X", 9, bold);                         // 13 · Tax relief under special law? No
+  /* Part II — computation (official item numbers; row y = the printed centavo-dot baseline) */
+  const net24 = (L.l16||0) - (L.le250||0);
+  [
+    [628,   L.l14],                                    // 14 Total Amount of Compensation
+    [601.7, L.l15A], [585.8, L.l15B], [569.8, L.l15C], // 15 MWE · 16 MWE holiday/OT · 17 13th month & other benefits
+    [553.8, L.l15D], [537.9, L.l15E], [521.4, L.l15F], // 18 De minimis · 19 SSS/GSIS/PHIC/HDMF · 20 Other non-taxable
+    [505.9, L.l15T],                                   // 21 Total non-taxable
+    [490,   L.l16],                                    // 22 Total taxable compensation
+    [474,   L.le250||0],                               // 23 Less: not subject to withholding (≤250K/yr)
+    [458,   net24],                                    // 24 Net taxable compensation
+    [442,   L.l17],                                    // 25 Total taxes withheld
+    [426,   L.l18],                                    // 26 Add/(Less): adjustments of previous months
+    [410,   (L.l17||0)+(L.l18||0)],                    // 27 Taxes withheld for remittance
+    [394,   L.l19],                                    // 28 Less: tax remitted in previously filed return
+    [380,   0],                                        // 29 Other remittances made
+    [362,   L.l19],                                    // 30 Total tax remittances made
+    [346,   L.l20],                                    // 31 Tax still due / (overremittance)
+    [330,   L.l21], [314, L.l22], [298, L.l23],        // 32 Surcharge · 33 Interest · 34 Compromise
+    [282,   L.l24],                                    // 35 Total penalties
+    [266,   L.l25]                                     // 36 TOTAL AMOUNT STILL DUE / (Overremittance)
+  ].forEach(r=> amt(r[0], r[1]||0));
+  /* DRAFT watermark on every page */
+  doc.getPages().forEach(pg=>{
+    pg.drawText("DRAFT — FOR REVIEW", { x: 70, y: 260, size: 56, font: bold, color: rgb(.45,.52,.66), opacity: .16, rotate: degrees(38) });
+  });
+  return doc.save();
+}
+window.birFormPdf = async function(){
+  if(!draftCur) return;
+  let bytes;
+  try{ bytes = await buildBirFormPdf(); }
+  catch(e){ toast("Couldn't build the BIR form PDF — check your internet connection"); return; }
+  const c = draftCur.client, data = draftCur.data, saved = draftCur.saved;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  a.download = `${c.name.replace(/[^\w ]+/g,"").trim().replace(/ +/g,"_")}_BIR_1601C_${data.period}${saved ? "_v"+saved.version : ""}.pdf`;
+  a.click();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
 };
 window.setDraftField = function(key, el){
   const c = db.clients.find(x=>x.id===wpClient);
