@@ -641,6 +641,19 @@
   .wp-back{margin-left:2px; padding:7px 14px; font-size:.82rem;}
   .table-scroll{overflow-x:auto;}
   .table-scroll td{white-space:nowrap;}
+  th.ta-c, td.ta-c{text-align:center;}
+  th.ta-r, td.ta-r{text-align:right;}
+  /* toolbar download dropdown styled like a ghost button */
+  .tax-dd summary.dl-summary{
+    font-size:inherit; font-weight:400; color:var(--ink-soft);
+    border-radius:8px; padding:9px 16px; background:var(--surface);
+  }
+  .imp-note{font-size:.88rem; color:var(--ink-soft); margin-bottom:10px; line-height:1.5;}
+  .imp-cols{
+    font-size:.72rem; color:var(--muted); background:var(--paper);
+    border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+    margin-bottom:12px; line-height:1.7; letter-spacing:.02em;
+  }
   /* dashboard fills remaining height so it never looks half-loaded (item 11) */
   .dash{display:flex; flex-direction:column; min-height:calc(100vh - 140px);}
   .dash .attn-card{flex:1 1 auto; display:flex; flex-direction:column;}
@@ -1044,6 +1057,32 @@
     <footer>
       <div class="right">
         <button class="btn ghost" data-close="contactOverlay">Close</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ============================================================
+     IMPORT EMPLOYEES modal
+============================================================ -->
+<div class="overlay" id="impOverlay">
+  <div class="modal contact-modal" role="dialog" aria-modal="true">
+    <header>
+      <h2>Import employees from Excel</h2>
+      <button class="xclose" data-close="impOverlay">✕</button>
+    </header>
+    <div class="body">
+      <div class="field full">
+        <p class="imp-note">Upload an Excel file (.xlsx, .xls, or .csv) with these columns:</p>
+        <p class="imp-cols">LAST NAME · FIRST NAME · MIDDLE NAME · TIN · ADDRESS · POSITION · DATE HIRED · DATE TERMINATED · MONTHLY RATE · DAILY RATE · STATUS</p>
+        <p class="imp-note">Not sure of the format? Download the template below, fill it out, then upload it here.</p>
+        <button type="button" class="add-contact" onclick="downloadEmpTemplate()">⬇ Download the template (.xlsx)</button>
+      </div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="impOverlay">Cancel</button>
+        <button class="btn" onclick="$('empImportFile').click()">Choose Excel file…</button>
       </div>
     </footer>
   </div>
@@ -2081,13 +2120,13 @@ function renderWpEmployees(R, c){
       <td>${escapeHtml((e.firstName||"").toUpperCase()||"—")}</td>
       <td>${escapeHtml((e.middleName||"").toUpperCase()||"—")}</td>
       <td><div class="cname">${escapeHtml(fullName)}</div></td>
-      <td class="due">${escapeHtml(e.tin||"—")}</td>
+      <td class="due ta-c">${escapeHtml(e.tin||"—")}</td>
       <td>${escapeHtml(e.position||"—")}</td>
       <td>${escapeHtml(e.address||"—")}</td>
       <td class="due">${escapeHtml(e.dateHired||"—")}</td>
       <td class="due">${escapeHtml(e.dateTerminated||"—")}</td>
-      <td class="due">${fmtMoney(e.monthlyRate)}</td>
-      <td class="due">${fmtMoney(e.dailyRate)}</td>
+      <td class="due ta-r">${fmtMoney(e.monthlyRate)}</td>
+      <td class="due ta-r">${fmtMoney(e.dailyRate)}</td>
       <td><span class="flagchip ${e.status==="Separated"?"grey":"green"}">${escapeHtml(e.status||"Active")}</span></td>
     </tr>`;
   }).join("");
@@ -2099,7 +2138,13 @@ function renderWpEmployees(R, c){
     </div>
     <div class="toolbar">
       <div style="flex:1;"></div>
-      <button class="btn ghost" onclick="downloadEmpTemplate()">⬇ Download template</button>
+      <details class="tax-dd" onclick="event.stopPropagation();">
+        <summary class="dl-summary">⬇ Download masterlist <span class="dd-chev">▾</span></summary>
+        <div class="tax-dd-pop ct-pop">
+          <button class="ct-link" onclick="downloadEmpMasterlist('xlsx')">Excel (.xlsx)</button>
+          <button class="ct-link" onclick="downloadEmpMasterlist('pdf')">PDF</button>
+        </div>
+      </details>
       <button class="btn ghost" onclick="importEmployees()">⬆ Import from Excel</button>
       <button class="btn" id="btnAddEmp" onclick="openEmp(null)">+ Add employee</button>
       <input type="file" id="empImportFile" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleEmpImport(this)">
@@ -2110,8 +2155,8 @@ function renderWpEmployees(R, c){
       <table>
         <thead><tr>
           <th style="width:44px;">#</th><th>Last name</th><th>First name</th><th>Middle name</th><th>Full name</th>
-          <th>TIN</th><th>Position</th><th>Address</th><th>Date hired</th><th>Date terminated</th>
-          <th>Monthly rate</th><th>Daily rate</th><th>Status</th>
+          <th class="ta-c">TIN</th><th>Position</th><th>Address</th><th>Date hired</th><th>Date terminated</th>
+          <th class="ta-r">Monthly rate</th><th class="ta-r">Daily rate</th><th>Status</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -2230,11 +2275,15 @@ window.downloadEmpTemplate = async function(){
   XLSX.utils.book_append_sheet(wb, ws, "Employees");
   XLSX.writeFile(wb, "MSMA_Employee_Masterlist_Template.xlsx");
 };
-window.importEmployees = function(){ $("empImportFile").click(); };
+window.importEmployees = function(){
+  resetModalPosition("impOverlay");
+  $("impOverlay").classList.add("open");
+};
 window.handleEmpImport = async function(input){
   const file = input.files && input.files[0];
   input.value = "";                                  // allow re-picking the same file
   if(!file) return;
+  closeOverlays();                                   // close the import popup
   const c = db.clients.find(x=>x.id===wpClient);
   if(!c) return;
   try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
@@ -2278,6 +2327,68 @@ window.handleEmpImport = async function(input){
   toast(added
     ? `Imported ${added} employee${added===1?"":"s"}${skipped ? ` · ${skipped} row${skipped===1?"":"s"} skipped (missing name)` : ""}`
     : "No employees found in the file");
+};
+
+/* ---- Download the employee masterlist (Excel / PDF) ---- */
+let jsPdfPromise = null;
+function loadJsPDF(){
+  if(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
+  if(!jsPdfPromise){
+    const add = src => new Promise((res, rej)=>{
+      const s = document.createElement("script");
+      s.src = src; s.onload = res; s.onerror = ()=>rej(new Error("script failed: "+src));
+      document.head.appendChild(s);
+    });
+    jsPdfPromise = add("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")
+      .then(()=> add("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"))
+      .catch(e=>{ jsPdfPromise = null; throw e; });
+  }
+  return jsPdfPromise;
+}
+const EMP_EXPORT_HEADERS = ["#","LAST NAME","FIRST NAME","MIDDLE NAME","FULL NAME","TIN","POSITION","ADDRESS","DATE HIRED","DATE TERMINATED","MONTHLY RATE","DAILY RATE","STATUS"];
+function empExportRows(emps){
+  return emps.map((e,i)=>[
+    i+1,
+    (e.lastName||"").toUpperCase(), (e.firstName||"").toUpperCase(), (e.middleName||"").toUpperCase(),
+    [e.firstName,e.middleName,e.lastName].filter(Boolean).join(" ").toUpperCase() || (e.name||""),
+    e.tin||"", e.position||"", e.address||"", e.dateHired||"", e.dateTerminated||"",
+    e.monthlyRate ? +e.monthlyRate : "", e.dailyRate ? +e.dailyRate : "",
+    e.status||"Active"
+  ]);
+}
+window.downloadEmpMasterlist = async function(fmt){
+  document.querySelectorAll(".tax-dd[open]").forEach(d=> d.removeAttribute("open"));
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const emps = c.employees || [];
+  if(!emps.length){ toast("No employees to download yet"); return; }
+  const t = nowPST();
+  const stamp = `${t.y}-${String(t.m).padStart(2,"0")}-${String(t.d).padStart(2,"0")}`;
+  const base = `${c.name.replace(/[^\w ]+/g,"").trim().replace(/ +/g,"_")}_Employee_Masterlist_${stamp}`;
+  if(fmt === "xlsx"){
+    try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
+    const ws = XLSX.utils.aoa_to_sheet([EMP_EXPORT_HEADERS, ...empExportRows(emps)]);
+    ws["!cols"] = [{wch:4},{wch:16},{wch:14},{wch:14},{wch:28},{wch:17},{wch:20},{wch:30},{wch:12},{wch:14},{wch:13},{wch:11},{wch:10}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Employees");
+    XLSX.writeFile(wb, base + ".xlsx");
+  } else {
+    try{ await loadJsPDF(); }catch(e){ toast("Couldn't load the PDF engine — check your internet connection"); return; }
+    const doc = new window.jspdf.jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+    doc.setFontSize(13); doc.setFont(undefined, "bold");
+    doc.text(`${c.name} — Employee Masterlist`, 14, 14);
+    doc.setFontSize(9); doc.setFont(undefined, "normal"); doc.setTextColor(100);
+    doc.text(`${cluster} Cluster · as of ${MONTHS[t.m-1]} ${t.d}, ${t.y} · ${emps.length} employee${emps.length===1?"":"s"}`, 14, 20);
+    doc.autoTable({
+      startY: 25,
+      head: [EMP_EXPORT_HEADERS],
+      body: empExportRows(emps).map(r=>r.map((v,ci)=> (ci===10||ci===11) && v!=="" ? Number(v).toLocaleString("en-PH",{minimumFractionDigits:2}) : v)),
+      styles:{ fontSize:6.5, cellPadding:1.5 },
+      headStyles:{ fillColor:[59,130,246], fontSize:6.5 },
+      columnStyles:{ 5:{halign:"center"}, 10:{halign:"right"}, 11:{halign:"right"} }
+    });
+    doc.save(base + ".pdf");
+  }
 };
 
 /* -------------------- Masterlist -------------------- */
