@@ -1213,6 +1213,33 @@
   </div>
 </div>
 
+<!-- Save and Record the Withholding Tax Computation -->
+<div class="overlay" id="wtcSaveOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header>
+      <h2>Save and Record</h2>
+      <button class="xclose" data-close="wtcSaveOverlay">✕</button>
+    </header>
+    <div class="body">
+      <div class="field full">
+        <label>Period covered</label>
+        <input id="wtcPeriod" type="month" onchange="updateWtcSaveNote()">
+      </div>
+      <div class="field full" id="wtcRemarksField" style="display:none;">
+        <label>Remarks — what changed in this version</label>
+        <textarea id="wtcRemarks" rows="3" placeholder="e.g. Corrected the daily rate of DELA CRUZ, JUAN per client advice"></textarea>
+      </div>
+      <p class="imp-cols" id="wtcSaveNote" style="line-height:1.55;"></p>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="wtcSaveOverlay">Cancel</button>
+        <button class="btn" onclick="confirmWtcSave()">Save and Record</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
 <!-- ============================================================
      LOGIN-SUCCESS ANIMATION — BIR returns sucked into a computer
 ============================================================ -->
@@ -1596,6 +1623,7 @@ let wpVerif = null;              // last payroll-verification result
 let wpManualSel = null;          // Set of employee ids included in a manual computation
 let wpWtcOn = false;             // true once "Proceed with computation" appends the IC columns
 let wpCompFreq = "Semi-monthly"; // payroll frequency driving the withholding table brackets
+let wpWtcViewRec = null;         // id of a recorded computation being viewed
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1804,7 +1832,7 @@ window.openWpClient = function(cid){ wpClient = cid; wpSection = null; render();
 window.backToWpCompanies = function(){ wpClient = null; wpSection = null; render(); };
 window.openWpSection = function(key){
   wpSection = key;
-  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; }
+  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpWtcViewRec = null; }
   render();
   if(key === "computation") openPayrollAsk();
 };
@@ -1812,7 +1840,7 @@ window.backToWpSections = function(){ wpSection = null; render(); };
 /* pipeline hook: Data Received on 1601-C jumps straight into the computation */
 window.goToWtcComputation = function(cid){
   wpReturn = "1601C"; wpClient = cid; wpSection = "computation";
-  wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpSearchQ = "";
+  wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpWtcViewRec = null; wpSearchQ = "";
   view = "wpdetail";
   $("taxParent").classList.remove("open");
   $("taxSubmenu").classList.remove("open");
@@ -1924,6 +1952,37 @@ function wtcFmt(n){                                    // accounting style: nega
   const a = Math.abs(n).toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2});
   return n < -0.004 ? `(${a})` : a;
 }
+/* collect the current sheet as {vals: 31 payroll strings, emp: masterlist employee|null, tin} rows */
+function wtcCollectRows(c){
+  const fmt2 = v => { const x = parseFloat(String(v ?? "").replace(/,/g,"")); return isNaN(x) ? "" : x.toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2}); };
+  if(wpVerif && wpVerif.rows){
+    const normName = s => String(s||"").toUpperCase().replace(/[^A-Z ]/g," ").replace(/\s+/g," ").trim();
+    const map = new Map();
+    (c.employees||[]).forEach(e=>{
+      [ `${e.lastName||""} ${e.firstName||""} ${e.middleName||""}`,
+        `${e.firstName||""} ${e.middleName||""} ${e.lastName||""}`,
+        e.name||"" ].map(normName).filter(Boolean).forEach(k=>{ if(!map.has(k)) map.set(k, e); });
+    });
+    return wpVerif.rows.map(r=>{
+      const emp = map.get(normName(`${r[3]} ${r[4]} ${r[5]}`)) || map.get(normName(r[6])) || null;
+      return { vals: r, emp, tin: r[7] || (emp && emp.tin) || "" };
+    });
+  }
+  migrateWtcManual(c);
+  const sel = wpManualSel || new Set();
+  return (c.employees||[]).filter(e=>sel.has(e.id)).map(e=>{
+    const saved = (c.wtcManual||{})[e.id] || {};
+    const vals = PAYROLL_HEADERS.map((h,i)=>{
+      if(i === 3) return (e.lastName||"").toUpperCase();
+      if(i === 4) return (e.firstName||"").toUpperCase();
+      if(i === 5) return (e.middleName||"").toUpperCase();
+      if(i === 6) return [e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ").toUpperCase();
+      if(i === 7) return e.tin||"";
+      return saved[i] != null ? saved[i] : (i === 8 ? fmt2(e.dailyRate) : "");
+    });
+    return { vals, emp: e, tin: e.tin||"" };
+  });
+}
 /* br = {vals: 31 payroll strings, emp: masterlist employee|null, tin} */
 function wtcComputeRow(br, freq){
   const n = i => wtcNum(br.vals[i]);
@@ -1950,6 +2009,64 @@ function wtcComputeRow(br, freq){
           wtcFmt(grossComp), wtcFmt(mweBasic), wtcFmt(mweOt), wtcFmt(thirteenOb), wtcFmt(deMin),
           wtcFmt(contrib), le250 == null ? "" : wtcFmt(le250), wtcFmt(taxable), wtcFmt(tax)];
 }
+
+/* ---- Save and Record the computation (versioned, per period) ---- */
+window.openWtcSave = function(){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const t = nowPST();
+  $("wtcPeriod").value = `${t.y}-${String(t.m).padStart(2,"0")}`;
+  $("wtcRemarks").value = "";
+  updateWtcSaveNote();
+  resetModalPosition("wtcSaveOverlay");
+  $("wtcSaveOverlay").classList.add("open");
+};
+window.updateWtcSaveNote = function(){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const p = $("wtcPeriod").value;
+  const existing = (c.wtcRecords||[]).filter(r=>r.period===p);
+  const [py, pm] = p ? p.split("-") : [];
+  const label = p ? `${MONTHS[+pm-1]} ${py}` : "(select the period)";
+  $("wtcRemarksField").style.display = existing.length ? "" : "none";
+  $("wtcSaveNote").innerHTML =
+    `You are recording the Withholding Tax Computation of <b>${escapeHtml(c.name)}</b> for the period <b>${label}</b> — please make sure this is the month you are computing for.<br><br>
+    Once saved and recorded, the output becomes <b>subject for review by your direct supervisor</b>. If any changes are required, the system will create a new version of the recorded computation with remarks describing the changes.` +
+    (existing.length ? `<br><br>This period already has <b>version ${existing.length}</b> on record — this save will be recorded as <b>version ${existing.length + 1}</b>, and remarks describing the changes are required.` : "");
+};
+window.confirmWtcSave = function(){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const p = $("wtcPeriod").value;
+  if(!p){ toast("Select the period covered"); return; }
+  const existing = (c.wtcRecords||[]).filter(r=>r.period===p);
+  const remarks = $("wtcRemarks").value.trim();
+  if(existing.length && !remarks){ toast("Describe the changes for this new version"); $("wtcRemarks").focus(); return; }
+  const baseRows = wtcCollectRows(c);
+  if(!baseRows.length){ toast("Nothing to record yet"); return; }
+  // snapshot: base payroll values (blank amounts locked in as 0.00) + the IC computation, all hardcoded
+  const rows = baseRows.map(br=>{
+    const disp = br.vals.map((v,i)=> (i >= 8 && String(v).trim() === "") ? "0.00" : String(v ?? ""));
+    return disp.concat(wtcComputeRow(br, wpCompFreq));
+  });
+  if(!c.wtcRecords) c.wtcRecords = [];
+  const rec = {
+    id: "w" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    period: p, version: existing.length + 1, freq: wpCompFreq,
+    savedAt: new Date().toISOString(), savedBy: cluster,
+    status: "For supervisor review", remarks, rows
+  };
+  c.wtcRecords.push(rec);
+  save(); closeOverlays();
+  wpWtcOn = false; wpWtcViewRec = rec.id;
+  render();
+  const [py, pm] = p.split("-");
+  toast(`Recorded — ${MONTHS[+pm-1]} ${py}, version ${rec.version}`);
+};
+window.openWtcRecord = function(id){
+  wpWtcViewRec = id;
+  render();
+};
 
 /* ---- WTC manual sheet: Excel-style range selection + block paste ---- */
 let wtcSel = null;                                     // {r1,c1,r2,c2} in grid coords
@@ -2736,6 +2853,60 @@ function renderWpComputation(R, c){
       <div class="sub">${escapeHtml(c.name)} · payroll data is verified against the Employee Masterlist before computing</div>
     </div>`;
 
+  /* viewing a recorded (saved) computation */
+  if(wpWtcViewRec){
+    const rec = (c.wtcRecords||[]).find(r=>r.id===wpWtcViewRec);
+    if(rec){
+      const [ry, rm] = rec.period.split("-");
+      const alignFor = i => i >= 8 ? "ta-r" : (i <= 2 || i === 7 ? "ta-c" : "");
+      const icAlign = i => (i >= 2 && i <= 4) ? "ta-c" : "ta-r";
+      const NB = PAYROLL_HEADERS.length;
+      const thead = `<tr>${PAYROLL_HEADERS.map((h,i)=>`<th class="${alignFor(i)}">${escapeHtml(h)}</th>`).join("")}${WTC_COMP_HEADERS.map((h,i)=>`<th class="wtc-ic ${icAlign(i)}">${escapeHtml(h)}</th>`).join("")}</tr>`;
+      const tbody = rec.rows.map(r=>`<tr>${r.map((v,i)=> i < NB
+        ? `<td class="${alignFor(i)}">${escapeHtml(v)}</td>`
+        : `<td class="wtc-ic ${icAlign(i-NB)}${(i-NB)===2&&v!=="MATCH"?" wtc-warn":""}">${escapeHtml(v)}</td>`).join("")}</tr>`).join("");
+      return head + `
+        <div class="card">
+          <div class="card-title">Recorded Withholding Tax Computation — ${MONTHS[+rm-1]} ${ry} <span class="pill">version ${rec.version}</span></div>
+          <div class="wtc-note">Saved ${fmtDateMDY(rec.savedAt.slice(0,10))} by ${escapeHtml(rec.savedBy||"")} · ${escapeHtml(rec.freq)} payroll · <span class="flagchip amber">${escapeHtml(rec.status)}</span>${rec.remarks ? ` · <b>Remarks:</b> ${escapeHtml(rec.remarks)}` : ""}</div>
+          <div class="wtc-scroll"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+        </div>
+        <div class="toolbar" style="margin-top:4px;">
+          <div style="flex:1; font-size:.82rem; color:var(--muted);">Recorded working papers are locked — a new save for the same period creates the next version.</div>
+          <button class="btn ghost" onclick="wpWtcViewRec=null; render();">← Back to Withholding Tax Computation</button>
+        </div>`;
+    }
+    wpWtcViewRec = null;
+  }
+
+  /* recorded computations listed inside this tab */
+  const wtcRecCard = (()=>{
+    const recs = (c.wtcRecords||[]).slice().sort((a,b)=> String(b.savedAt).localeCompare(String(a.savedAt)));
+    if(!recs.length) return "";
+    return `
+      <div class="card">
+        <div class="card-title">Recorded computations <span class="pill">${recs.length}</span></div>
+        <div class="table-scroll">
+        <table>
+          <thead><tr><th>Period</th><th class="ta-c">Version</th><th>Saved</th><th>By</th><th class="ta-c">Frequency</th><th>Status</th><th>Remarks</th></tr></thead>
+          <tbody>${recs.map(r=>{
+            const [ry, rm] = String(r.period).split("-");
+            return `
+            <tr class="crow" onclick="openWtcRecord('${r.id}')">
+              <td><div class="cname">${MONTHS[+rm-1]} ${ry}</div></td>
+              <td class="due ta-c">v${r.version}</td>
+              <td class="due">${fmtDateMDY(String(r.savedAt).slice(0,10))}</td>
+              <td class="due">${escapeHtml(r.savedBy||"—")}</td>
+              <td class="due ta-c">${escapeHtml(r.freq||"—")}</td>
+              <td><span class="flagchip amber">${escapeHtml(r.status||"For supervisor review")}</span></td>
+              <td style="max-width:280px; white-space:normal;">${escapeHtml(r.remarks||"—")}</td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table>
+        </div>
+      </div>`;
+  })();
+
   if(wpCompPhase === "nodata") return head + `
     <div class="card"><div class="attn-empty" style="min-height:210px;">
       <div>No standard payroll data from <b>${escapeHtml(c.name)}</b> yet.<br>
@@ -2837,39 +3008,8 @@ function renderWpComputation(R, c){
   }
 
   if(wpCompPhase === "compute" && wpWtcOn){
-    const manual = !wpVerif;
     const alignFor = i => i >= 8 ? "ta-r" : (i <= 2 || i === 7 ? "ta-c" : "");
-    const fmt2 = v => { const x = parseFloat(String(v ?? "").replace(/,/g,"")); return isNaN(x) ? "" : x.toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2}); };
-    /* collect rows as {vals[31], emp|null, tin} */
-    let baseRows;
-    if(!manual && wpVerif.rows){
-      const normName = s => String(s||"").toUpperCase().replace(/[^A-Z ]/g," ").replace(/\s+/g," ").trim();
-      const map = new Map();
-      (c.employees||[]).forEach(e=>{
-        [ `${e.lastName||""} ${e.firstName||""} ${e.middleName||""}`,
-          `${e.firstName||""} ${e.middleName||""} ${e.lastName||""}`,
-          e.name||"" ].map(normName).filter(Boolean).forEach(k=>{ if(!map.has(k)) map.set(k, e); });
-      });
-      baseRows = wpVerif.rows.map(r=>{
-        const emp = map.get(normName(`${r[3]} ${r[4]} ${r[5]}`)) || map.get(normName(r[6])) || null;
-        return { vals: r, emp, tin: r[7] || (emp && emp.tin) || "" };
-      });
-    } else {
-      migrateWtcManual(c);
-      const sel = wpManualSel || new Set();
-      baseRows = (c.employees||[]).filter(e=>sel.has(e.id)).map(e=>{
-        const saved = (c.wtcManual||{})[e.id] || {};
-        const vals = PAYROLL_HEADERS.map((h,i)=>{
-          if(i === 3) return (e.lastName||"").toUpperCase();
-          if(i === 4) return (e.firstName||"").toUpperCase();
-          if(i === 5) return (e.middleName||"").toUpperCase();
-          if(i === 6) return [e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ").toUpperCase();
-          if(i === 7) return e.tin||"";
-          return saved[i] != null ? saved[i] : (i === 8 ? fmt2(e.dailyRate) : "");
-        });
-        return { vals, emp: e, tin: e.tin||"" };
-      });
-    }
+    const baseRows = wtcCollectRows(c);
     const rowCount = baseRows.length;
     const icAlign = i => (i >= 2 && i <= 4) ? "ta-c" : "ta-r";
     const thead = `<tr>${PAYROLL_HEADERS.map((h,i)=>`<th class="${alignFor(i)}">${escapeHtml(h)}</th>`).join("")}${WTC_COMP_HEADERS.map((h,i)=>`<th class="wtc-ic ${icAlign(i)}">${escapeHtml(h)}</th>`).join("")}</tr>`;
@@ -2891,6 +3031,7 @@ function renderWpComputation(R, c){
       <div class="toolbar" style="margin-top:4px;">
         <div style="flex:1; font-size:.82rem; color:var(--muted);">TAX WITHHELD follows the BIR revised withholding tax table (effective 2023) for the selected frequency.</div>
         <button class="btn ghost" onclick="wpWtcOn=false; render();">← Back to payroll encoding</button>
+        ${rowCount ? `<button class="btn" onclick="openWtcSave()">Save and Record</button>` : ""}
       </div>`;
   }
 
@@ -2953,7 +3094,7 @@ function renderWpComputation(R, c){
     <div class="card"><div class="attn-empty" style="min-height:190px;">
       <div>First, confirm whether <b>${escapeHtml(c.name)}</b> provided the standard payroll data.</div>
       <button class="btn" style="margin-top:14px;" onclick="openPayrollAsk()">Answer the prompt</button>
-    </div></div>`;
+    </div></div>` + wtcRecCard;
 }
 
 window.handlePayrollVerify = async function(input){
