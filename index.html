@@ -641,6 +641,12 @@
   .wp-back{margin-left:2px; padding:7px 14px; font-size:.82rem;}
   .table-scroll{overflow-x:auto;}
   .table-scroll td{white-space:nowrap;}
+  /* WTC payroll sheet: standard payroll header stays fixed while the data scrolls */
+  .wtc-scroll{overflow:auto; max-height:62vh;}
+  .wtc-scroll table{width:max-content; min-width:100%;}
+  .wtc-scroll thead th{position:sticky; top:0; z-index:2; background:#0f172a; color:#cbd5e1; border-bottom:2px solid var(--accent);}
+  .wtc-scroll td{white-space:nowrap; font-size:.82rem;}
+  .wtc-note{padding:8px 16px 0; font-size:.78rem; color:var(--muted);}
   th.ta-c, td.ta-c{text-align:center;}
   th.ta-r, td.ta-r{text-align:right;}
   /* toolbar download dropdown styled like a ghost button */
@@ -2374,17 +2380,20 @@ window.downloadEmpTemplate = async function(){
   XLSX.writeFile(wb, "MSMA_Employee_Masterlist_Template.xlsx");
 };
 /* standard payroll data template (downloadable from the RQ popup and the WTC verification) */
+/* Standard payroll columns — the single source of truth for the downloadable
+   template AND the fixed header of the Withholding Tax Computation sheet */
+const PAYROLL_HEADERS = [
+  "MONTH END","FROM","TO",
+  "LAST NAME","FIRST NAME","MIDDLE NAME","FULL NAME","TIN",
+  "DAILY RATE","NO OF DAYS","BASIC PAY","OVERTIME PAY","HOLIDAY PAY","ALLOWANCES",
+  "13TH MONTH PAY","OTHER INCENTIVES",
+  "LATE","ABSENT","TARDINESS","LEAVE WITHOUT PAY",
+  "GROSS PAY","SSS","HDMF","PHIC","W/TAX",
+  "SSS LOAN","HDMF LOAN","PERSONAL LOAN","OTHER DEDUCTION","NET PAY"
+];
 window.downloadPayrollTemplate = async function(){
   try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
-  const headers = [
-    "MONTH END","FROM","TO",
-    "LAST NAME","FIRST NAME","MIDDLE NAME","FULL NAME","TIN",
-    "DAILY RATE","NO OF DAYS","BASIC PAY","OVERTIME PAY","HOLIDAY PAY","ALLOWANCES",
-    "13TH MONTH PAY","OTHER INCENTIVES",
-    "LATE","ABSENT","TARDINESS","LEAVE WITHOUT PAY",
-    "GROSS PAY","SSS","HDMF","PHIC","W/TAX",
-    "SSS LOAN","HDMF LOAN","PERSONAL LOAN","OTHER DEDUCTION","NET PAY"
-  ];
+  const headers = PAYROLL_HEADERS;
   const ws = XLSX.utils.aoa_to_sheet([
     headers,
     ["06/30/2026","06/01/2026","06/15/2026","DELA CRUZ","JUAN","PROTACIO","JUAN PROTACIO DELA CRUZ","123-456-789-000",
@@ -2622,16 +2631,44 @@ function renderWpComputation(R, c){
       </div>`;
   }
 
-  if(wpCompPhase === "compute") return head + `
-    <div class="card"><div class="attn-empty" style="min-height:200px;">
-      <div>${wpVerif
-        ? `Payroll data for <b>${escapeHtml(c.name)}</b> is verified and locked in ✓`
-        : `<b>Manual mode</b> — ${wpManualSel ? `<b>${wpManualSel.size}</b> employee${wpManualSel.size===1?"":"s"} selected from the masterlist` : `payroll verification was skipped`} for <b>${escapeHtml(c.name)}</b>.`}<br>
-      The withholding computation engine is the next build step — tell us the computation sheet you use and we'll model it.</div>
-      ${wpVerif
-        ? `<button class="btn ghost" style="margin-top:14px;" onclick="wpCompPhase='results'; render();">← Back to verification results</button>`
-        : `<button class="btn ghost" style="margin-top:14px;" onclick="wpCompPhase='manual-select'; render();">← Back to employee selection</button>`}
-    </div></div>`;
+  if(wpCompPhase === "compute"){
+    const manual = !wpVerif;
+    let sheetRows;
+    if(!manual && wpVerif.rows){
+      sheetRows = wpVerif.rows;                        // hardcoded straight from the uploaded file
+    } else {
+      const sel = wpManualSel || new Set();            // manual: identity columns from the masterlist
+      sheetRows = (c.employees||[]).filter(e=>sel.has(e.id)).map(e=>{
+        const r = PAYROLL_HEADERS.map(()=> "");
+        r[3] = (e.lastName||"").toUpperCase();
+        r[4] = (e.firstName||"").toUpperCase();
+        r[5] = (e.middleName||"").toUpperCase();
+        r[6] = [e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ").toUpperCase();
+        r[7] = e.tin || "";
+        r[8] = e.dailyRate ? fmtMoney(e.dailyRate) : "";
+        return r;
+      });
+    }
+    const alignFor = i => i >= 8 ? "ta-r" : (i <= 2 || i === 7 ? "ta-c" : "");
+    const thead = `<tr>${PAYROLL_HEADERS.map((h,i)=>`<th class="${alignFor(i)}">${escapeHtml(h)}</th>`).join("")}</tr>`;
+    const tbody = sheetRows.length
+      ? sheetRows.map(r=>`<tr>${r.map((v,i)=>`<td class="${alignFor(i)}">${escapeHtml(v)}</td>`).join("")}</tr>`).join("")
+      : `<tr><td colspan="${PAYROLL_HEADERS.length}" style="text-align:center; color:var(--muted); padding:26px;">No payroll rows yet.</td></tr>`;
+    return head + `
+      <div class="card">
+        <div class="card-title">Standard Payroll Data <span class="pill">${sheetRows.length} row${sheetRows.length===1?"":"s"}</span></div>
+        <div class="wtc-note">${manual
+          ? `<b>Manual mode</b> — names, TINs, and daily rates carried from the Employee Masterlist; payroll figures to be encoded from the client's records.`
+          : `Values copied as-is from <b>${escapeHtml(wpVerif.fileName)}</b> — hardcoded, nothing is recomputed.`}</div>
+        <div class="wtc-scroll"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+      </div>
+      <div class="toolbar" style="margin-top:4px;">
+        <div style="flex:1; font-size:.82rem; color:var(--muted);">The withholding computation engine is the next build step.</div>
+        ${manual
+          ? `<button class="btn ghost" onclick="wpCompPhase='manual-select'; render();">← Back to employee selection</button>`
+          : `<button class="btn ghost" onclick="wpCompPhase='results'; render();">← Back to verification results</button>`}
+      </div>`;
+  }
 
   /* default: waiting for the popup answer */
   return head + `
@@ -2713,7 +2750,14 @@ window.handlePayrollVerify = async function(input){
     if(issues.length) errRows.push({ name: dispName, issues }); else ok++;
   });
   const missing = (c.employees||[]).filter(e=>e.status!=="Separated" && !matched.has(e.id)).map(e=>e.name);
-  wpVerif = { fileName:file.name, total, ok, errRows, missing };
+  // carry the payroll values over verbatim for the computation sheet (hardcoded, never recomputed)
+  const hmap = new Map();
+  header.forEach((h,i)=>{ if(h && !hmap.has(h)) hmap.set(h, i); });
+  const stdIdx = PAYROLL_HEADERS.map(h=> hmap.has(norm(h)) ? hmap.get(norm(h)) : -1);
+  const sheetRows = rows.slice(hIdx + 1)
+    .filter(r=> r.some(x=> String(x||"").trim() !== ""))
+    .map(r=> stdIdx.map(ix=> ix > -1 ? String(r[ix] == null ? "" : r[ix]).trim() : ""));
+  wpVerif = { fileName:file.name, total, ok, errRows, missing, rows: sheetRows };
   wpCompPhase = "results";
   render();
   toast(errRows.length ? `Verification found ${errRows.length} discrepanc${errRows.length===1?"y":"ies"}` : "Verification passed — all rows match");
