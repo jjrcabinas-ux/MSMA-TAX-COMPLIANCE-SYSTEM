@@ -3420,6 +3420,17 @@ function commitDraft(remarks){
     savedAt: new Date().toISOString(), savedBy: cluster, remarks,
     preparer: c.preparer||"", reviewer: c.reviewer||"", lines: draftCur.data.lines
   });
+  // pipeline hook: a saved draft moves the client's 1601-C record for that month to "Return Drafted"
+  const [dy, dm] = draftCur.data.period.split("-");
+  const pRec = getRecord("1601C", { y:+dy, m:+dm }, c.id);
+  if(pRec.stage < 3){
+    while(pRec.stage < 3){
+      const step = STEPS[pRec.stage];
+      if(!pRec.dates[step.key]) pRec.dates[step.key] = dateStampPST();
+      pRec.stage++;
+    }
+    toast(`Pipeline updated — ${MONTHS[+dm-1]} ${dy} 1601-C is now Return Drafted`);
+  }
   save(); closeOverlays();
   wpDraftPeriod = null; render();
   toast(`Draft return saved for approval — version ${existing.length + 1}`);
