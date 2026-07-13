@@ -1929,8 +1929,11 @@ function wtcComputeRow(br, freq){
   const n = i => wtcNum(br.vals[i]);
   const A = i => Math.abs(n(i));
   const type = (br.emp && br.emp.type) || "T";
-  const netIC = n(21) - (A(22)+A(23)+A(24)+A(25)+A(26)+A(27)+A(28)+A(29));
-  const diff = n(30) - netIC;
+  /* NET PAY - IC = Σ(BASIC PAY … LEAVE WITHOUT PAY) − Σ(SSS … OTHER DEDUCTION),
+     SSS/HDMF/PHIC taken absolute before summing (encoded as negatives in payroll) */
+  const netIC = (n(10)+n(11)+n(12)+n(13)+n(14)+n(15)+n(16)+n(17)+n(18)+n(19)+n(20))
+              - (A(22)+A(23)+A(24) + n(25)+n(26)+n(27)+n(28)+n(29));
+  const diff = n(30) - netIC;                          // NET PAY per payroll − NET PAY - IC
   const remarks = Math.abs(diff) <= 0.01 ? "MATCH" : "FOR CHECKING";
   const report = String(br.tin||"").replace(/\D/g,"") ? "Y" : "N";
   const grossComp = n(10)+n(11)+n(12)+n(13)+n(14)+n(15)+n(16) - (A(17)+A(18)+A(19)+A(20));
