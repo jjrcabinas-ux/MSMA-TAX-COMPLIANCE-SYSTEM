@@ -1083,6 +1083,7 @@
       </div>
     </div>
     <footer>
+      <button class="btn ghost" onclick="payrollManual()">Proceed manually</button>
       <div class="right">
         <button class="btn ghost" onclick="payrollAnswer(false)">Not yet</button>
         <button class="btn" onclick="payrollAnswer(true)">Yes — verify the data</button>
@@ -1795,6 +1796,12 @@ window.openPayrollAsk = function(){
 window.payrollAnswer = function(yes){
   closeOverlays();
   wpCompPhase = yes ? "upload" : "nodata";
+  render();
+};
+window.payrollManual = function(){
+  closeOverlays();
+  wpVerif = null;                 // manual mode: no verified payroll data
+  wpCompPhase = "compute";
   render();
 };
 function renderWorkingPaper(){
@@ -2556,9 +2563,13 @@ function renderWpComputation(R, c){
 
   if(wpCompPhase === "compute") return head + `
     <div class="card"><div class="attn-empty" style="min-height:200px;">
-      <div>Payroll data for <b>${escapeHtml(c.name)}</b> is verified and locked in ✓<br>
+      <div>${wpVerif
+        ? `Payroll data for <b>${escapeHtml(c.name)}</b> is verified and locked in ✓`
+        : `<b>Manual mode</b> — payroll verification was skipped for <b>${escapeHtml(c.name)}</b>.`}<br>
       The withholding computation engine is the next build step — tell us the computation sheet you use and we'll model it.</div>
-      <button class="btn ghost" style="margin-top:14px;" onclick="wpCompPhase='results'; render();">← Back to verification results</button>
+      ${wpVerif
+        ? `<button class="btn ghost" style="margin-top:14px;" onclick="wpCompPhase='results'; render();">← Back to verification results</button>`
+        : `<button class="btn ghost" style="margin-top:14px;" onclick="openPayrollAsk()">← Back to the payroll prompt</button>`}
     </div></div>`;
 
   /* default: waiting for the popup answer */
