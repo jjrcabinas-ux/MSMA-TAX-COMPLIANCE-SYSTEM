@@ -1309,6 +1309,25 @@
   </div>
 </div>
 
+<!-- Confirm saving the draft: the pipeline advances and locks -->
+<div class="overlay" id="draftConfirmOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header>
+      <h2>Save draft return</h2>
+      <button class="xclose" data-close="draftConfirmOverlay">✕</button>
+    </header>
+    <div class="body">
+      <p class="imp-cols" id="draftConfirmNote" style="line-height:1.6;"></p>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="draftConfirmOverlay">Cancel</button>
+        <button class="btn" onclick="confirmDraftSave()">Save and update pipeline</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
 <!-- Additional draft for a month that already has one: reason required -->
 <div class="overlay" id="draftReasonOverlay">
   <div class="modal" role="dialog" aria-modal="true">
@@ -3400,14 +3419,23 @@ window.saveDraftForApproval = function(){
   if(!draftCur || draftCur.saved) return;
   const c = draftCur.client;
   const existing = (c.draftRecords||[]).filter(r=>r.period===draftCur.data.period);
+  const [py, pm] = draftCur.data.period.split("-");
   if(existing.length){
-    const [py, pm] = draftCur.data.period.split("-");
     $("draftReason").value = "";
-    $("draftReasonNote").innerHTML = `<b>${MONTHS[+pm-1]} ${py}</b> already has <b>${existing.length} saved draft${existing.length===1?"":"s"}</b> for <b>${escapeHtml(c.name)}</b>. Only one draft per month is allowed — saving another requires a reason, and it will be recorded as <b>version ${existing.length + 1}</b>.`;
+    $("draftReasonNote").innerHTML = `<b>${MONTHS[+pm-1]} ${py}</b> already has <b>${existing.length} saved draft${existing.length===1?"":"s"}</b> for <b>${escapeHtml(c.name)}</b>. Only one draft per month is allowed — saving another requires a reason, and it will be recorded as <b>version ${existing.length + 1}</b>.<br><br>
+    The pipeline status stays as it is — the new version is simply recorded on the Return Drafted step.`;
     resetModalPosition("draftReasonOverlay");
     $("draftReasonOverlay").classList.add("open");
     return;
   }
+  $("draftConfirmNote").innerHTML = `You are saving the <b>${MONTHS[+pm-1]} ${py}</b> draft return of <b>${escapeHtml(c.name)}</b>.<br><br>
+  Once saved, the 1601-C pipeline for this period <b>automatically advances to Return Drafted</b> and is locked — the steps up to Return Drafted <b>can no longer be edited or unchecked</b>.<br><br>
+  If another version of the draft is made later, the pipeline status stays the same; the system only records the new version on the Return Drafted step.`;
+  resetModalPosition("draftConfirmOverlay");
+  $("draftConfirmOverlay").classList.add("open");
+};
+window.confirmDraftSave = function(){
+  $("draftConfirmOverlay").classList.remove("open");
   commitDraft("");
 };
 function commitDraft(remarks){
@@ -3969,7 +3997,12 @@ function renderTaxPage(taxType){
     const dl = deadlineFor(ret, c, p);
     const pipe = STEPS.map((s,i)=>{
       const done = i < rec.stage, next = i === rec.stage;
-      const tip = s.label + (rec.dates[s.key] ? ` · ${rec.dates[s.key]}` : "");
+      let tip = s.label + (rec.dates[s.key] ? ` · ${rec.dates[s.key]}` : "");
+      if(ret === "1601C" && s.key === "drafted" && p && p.y){
+        const pk = `${p.y}-${String(p.m).padStart(2,"0")}`;
+        const nv = (c.draftRecords||[]).filter(d=>d.period===pk).length;
+        if(nv) tip += ` · draft v${nv}`;
+      }
       return `<div class="step ${done?"done":next?"next":""}" data-tip="${escapeHtml(tip)}">${s.short}</div>`;
     }).join("");
     const statusWord = rec.stage===0 ? "Not started"
@@ -4126,6 +4159,16 @@ window.stepRec = function(ret, clientId, dir){
   if(dir === 1 && rec.stage < STEPS.length){
     advanceStage(ret, clientId);
     return;
+  }
+  // a saved 1601-C draft locks the pipeline through "Return Drafted" — no unchecking below it
+  if(dir === -1 && ret === "1601C" && rec.stage <= 3 && rec.stage > 0){
+    const c = db.clients.find(x=>x.id===clientId);
+    const p = periods[ret];
+    const pk = `${p.y}-${String(p.m).padStart(2,"0")}`;
+    if(c && (c.draftRecords||[]).some(d=>d.period===pk)){
+      toast("Locked — a saved draft return exists for this period");
+      return;
+    }
   }
   if(dir === -1 && rec.stage > 0){
     rec.stage--;
