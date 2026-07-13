@@ -663,8 +663,8 @@
   .draft-sec td{font-weight:700; font-size:.78rem; letter-spacing:.04em; color:var(--muted); background:#fbfcfd;}
   /* A4 draft-return popup */
   .a4-overlay{align-items:flex-start; overflow-y:auto; padding:28px 12px;}
-  .a4-sheet{position:relative; background:#fff; width:min(794px, 96vw); min-height:1050px; margin:auto;
-    border-radius:6px; box-shadow:0 24px 70px rgba(2,6,23,.5); padding:50px 56px 34px; color:var(--ink);}
+  .a4-sheet{position:relative; background:#fff; width:min(794px, 96vw); margin:auto;
+    border-radius:6px; box-shadow:0 24px 70px rgba(2,6,23,.5); padding:26px 30px 22px; color:var(--ink);}
   .a4-close{position:absolute; top:14px; right:14px;}
   .a4-head{display:flex; gap:14px; align-items:center; border-bottom:2.5px solid #0f172a; padding-bottom:14px;}
   .a4-head img{width:46px; height:46px; object-fit:contain;}
@@ -1297,18 +1297,14 @@
 <div class="overlay a4-overlay" id="draftA4Overlay" onclick="if(event.target===this) closeOverlays();">
   <div class="a4-sheet">
     <button class="xclose a4-close" data-close="draftA4Overlay">✕</button>
+    <div id="draftA4Head" style="font-size:.85rem; color:var(--muted); padding:2px 34px 12px 2px;"></div>
     <div id="draftA4Body"></div>
     <div id="draftPdfWrap" style="display:none;">
-      <iframe id="draftPdfFrame" style="width:100%; height:72vh; border:1px solid var(--line); border-radius:6px; background:#525659;"></iframe>
+      <iframe id="draftPdfFrame" style="width:100%; height:74vh; border:1px solid var(--line); border-radius:6px; background:#525659;"></iframe>
     </div>
     <div class="a4-actions" id="draftMainActions">
-      <button class="btn ghost" onclick="previewDraftPdf('client')" title="The draft return on the official BIR Form 1601-C — preview, then download">⬇ Download Draft Return</button>
+      <button class="btn ghost" onclick="downloadPreviewedPdf()" title="Download the draft return on the official BIR Form 1601-C">⬇ Download Draft Return</button>
       <button class="btn" id="draftSaveBtn" onclick="saveDraftForApproval()">Save draft return for approval</button>
-    </div>
-    <div class="a4-actions" id="draftPreviewActions" style="display:none;">
-      <div id="draftPreviewLabel" style="flex:1; font-size:.82rem; color:var(--muted); align-self:center;"></div>
-      <button class="btn ghost" onclick="closeDraftPdfPreview()">← Back to draft</button>
-      <button class="btn" onclick="downloadPreviewedPdf()">⬇ Download this PDF</button>
     </div>
   </div>
 </div>
@@ -3373,41 +3369,29 @@ window.openDraftPreview = function(savedId){
   }
   draftCur = { data, saved, client: c };
   const [py, pm] = data.period.split("-");
-  const rows = DRAFT_LINES.map(L=>{
-    if(L[3] === 2) return `<tr class="a4-sec"><td></td><td colspan="2">${L[1]}</td></tr>`;
-    return `<tr class="${L[3] ? "a4-strong" : ""}"><td class="ta-c">${L[0]}</td><td>${L[1]}</td><td class="ta-r">${wtcFmt(data.lines[L[2]]||0)}</td></tr>`;
-  }).join("");
-  const prep = saved ? saved.preparer : (c.preparer||"");
-  const rev = saved ? saved.reviewer : (c.reviewer||"");
-  $("draftA4Body").innerHTML = `
-    <div class="a4-head">
-      <img src="assets/logo-mark.png" alt="" onerror="this.style.display='none'">
-      <div>
-        <div class="a4-firm">MORA, SANCHEZ, MEÑOZA AND ASSOCIATES</div>
-        <div class="a4-firmsub">MSMA Tax Compliance System · Working Paper</div>
-      </div>
-    </div>
-    <div class="a4-title">DRAFT RETURN — BIR FORM 1601-C</div>
-    <div class="a4-titlesub">Monthly Remittance Return of Income Taxes Withheld on Compensation</div>
-    <table class="a4-info"><tbody>
-      <tr><td>Withholding Agent</td><td>${escapeHtml(c.name)}</td><td>TIN</td><td>${escapeHtml(c.tin||"—")}</td></tr>
-      <tr><td>Return Period</td><td>${MONTHS[+pm-1]} ${py}</td><td>Basis</td><td>Withholding Tax Computation v${data.basedOn}</td></tr>
-      <tr><td>Draft Version</td><td>${saved ? "v"+saved.version : `v${((c.draftRecords||[]).filter(r=>r.period===data.period).length)+1} — unsaved preview`}</td>
-      <td>Prepared</td><td>${fmtDateMDY((saved ? String(saved.savedAt) : new Date().toISOString()).slice(0,10))} · ${escapeHtml((saved && saved.savedBy) || cluster)} Cluster</td></tr>
-      ${saved && saved.remarks ? `<tr><td>Remarks</td><td colspan="3">${escapeHtml(saved.remarks)}</td></tr>` : ""}
-    </tbody></table>
-    <table class="a4-lines">
-      <thead><tr><th style="width:54px;">Line</th><th>Particulars</th><th class="ta-r" style="width:150px;">Amount (₱)</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="a4-sign">
-      <div><div class="sig-name">${escapeHtml(prep.toUpperCase()) || "&nbsp;"}</div><div class="sig-line"></div><div class="sig-role">Prepared by · Junior Associate In-charge</div></div>
-      <div><div class="sig-name">${escapeHtml(rev.toUpperCase()) || "&nbsp;"}</div><div class="sig-line"></div><div class="sig-role">Reviewed by · Senior Associate In-charge / Team Leader</div></div>
-    </div>
-    <div class="a4-foot">System-generated draft for internal review and approval — not for filing · Mora, Sanchez, Meñoza and Associates</div>`;
+  /* the popup shows the ACTUAL BIR Form 1601-C, built fresh from the draft data */
   $("draftSaveBtn").style.display = saved ? "none" : "";
-  closeDraftPdfPreview();                              // always open on the draft view, not a stale PDF preview
+  $("draftA4Head").innerHTML = `<b>Draft Return — BIR Form 1601-C</b> · ${escapeHtml(c.name)} · ${MONTHS[+pm-1]} ${py} · ${saved ? "version " + saved.version : "unsaved preview (watermarked until saved)"}${saved && saved.remarks ? ` · Remarks: ${escapeHtml(saved.remarks)}` : ""}`;
+  $("draftA4Body").innerHTML = `<div style="padding:60px 20px; text-align:center; color:var(--muted);">Building the draft return…</div>`;
+  $("draftA4Body").style.display = "";
+  $("draftPdfWrap").style.display = "none";
   $("draftA4Overlay").classList.add("open");
+  (async function(){
+    let blob;
+    try{
+      const bytes = await buildBirFormPdf();
+      blob = new Blob([bytes], { type: "application/pdf" });
+    }catch(e){
+      $("draftA4Body").innerHTML = `<div style="padding:60px 20px; text-align:center; color:var(--muted);">Couldn't build the draft return — check your internet connection.</div>`;
+      return;
+    }
+    if(draftCur.previewUrl) URL.revokeObjectURL(draftCur.previewUrl);
+    draftCur.previewUrl = URL.createObjectURL(blob);
+    draftCur.previewName = draftPdfName("client");
+    $("draftPdfFrame").src = draftCur.previewUrl + "#toolbar=0&navpanes=0";
+    $("draftA4Body").style.display = "none";
+    $("draftPdfWrap").style.display = "";
+  })();
 };
 window.saveDraftForApproval = function(){
   if(!draftCur || draftCur.saved) return;
@@ -3625,39 +3609,9 @@ function draftPdfName(kind){
   const tag = kind === "client" ? "BIR_1601C" : "1601C_Draft";
   return `${base}_${tag}_${data.period}${saved ? "_v"+saved.version : ""}.pdf`;
 }
-window.previewDraftPdf = async function(kind){
-  if(!draftCur) return;
-  let blob;
-  try{
-    if(kind === "client"){
-      const bytes = await buildBirFormPdf();
-      blob = new Blob([bytes], { type: "application/pdf" });
-    } else {
-      const doc = await buildInternalPdf();
-      blob = doc.output("blob");
-    }
-  }catch(e){ toast("Couldn't build the preview — check your internet connection"); return; }
-  if(draftCur.previewUrl) URL.revokeObjectURL(draftCur.previewUrl);
-  draftCur.previewUrl = URL.createObjectURL(blob);
-  draftCur.previewName = draftPdfName(kind);
-  $("draftPreviewLabel").textContent = kind === "client"
-    ? "Draft Return — official BIR Form 1601-C"
-    : "Internal copy — firm working paper with Prepared by / Reviewed by";
-  $("draftPdfFrame").src = draftCur.previewUrl + "#toolbar=0&navpanes=0";
-  $("draftA4Body").style.display = "none";
-  $("draftPdfWrap").style.display = "";
-  $("draftMainActions").style.display = "none";
-  $("draftPreviewActions").style.display = "";
-};
-window.closeDraftPdfPreview = function(){
-  $("draftPdfFrame").src = "about:blank";
-  $("draftA4Body").style.display = "";
-  $("draftPdfWrap").style.display = "none";
-  $("draftMainActions").style.display = "";
-  $("draftPreviewActions").style.display = "none";
-};
 window.downloadPreviewedPdf = function(){
-  if(!draftCur || !draftCur.previewUrl) return;
+  if(!draftCur) return;
+  if(!draftCur.previewUrl){ toast("Still building the draft return — one moment"); return; }
   const a = document.createElement("a");
   a.href = draftCur.previewUrl;
   a.download = draftCur.previewName || "1601C_draft.pdf";
