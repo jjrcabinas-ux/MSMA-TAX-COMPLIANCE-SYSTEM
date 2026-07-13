@@ -1424,6 +1424,27 @@ const session = {
 let cluster = null;
 let db = null;
 function dbKey(){ return `msma_taxcomp_v1_${cluster}`; }
+/* remember where the user is so a refresh brings them back */
+function navKey(){ return `msma_nav_v1_${cluster}`; }
+function saveNav(){
+  store.set(navKey(), JSON.stringify({ view, wpReturn, wpClient, wpSection, activeReturn, periods }));
+}
+function restoreNav(){
+  let s = null;
+  try{ s = JSON.parse(store.get(navKey()) || "null"); }catch(e){}
+  if(!s || !s.view) return;
+  activeReturn = s.activeReturn || {};
+  periods = s.periods || {};
+  if(s.view === "wpdetail"){
+    if(!(s.wpReturn && RETURNS[s.wpReturn])){ view = "workingpaper"; return; }
+    wpReturn = s.wpReturn;
+    wpClient = s.wpClient && db.clients.some(c=>c.id===s.wpClient) ? s.wpClient : null;
+    wpSection = wpClient ? (s.wpSection || null) : null;
+    view = "wpdetail";
+    return;
+  }
+  if(["dashboard","masterlist","workingpaper","reports"].includes(s.view) || TAX_PAGES[s.view]) view = s.view;
+}
 function loadDb(){
   try { db = JSON.parse(store.get(dbKey())) || null; } catch(e){ db = null; }
   if(!db) db = { clients:[], records:{} };
@@ -1836,7 +1857,12 @@ function enterApp(cl){
   $("appScreen").style.display = "block";
   $("loginPw").value = "";
   view = "masterlist";
+  restoreNav();                                        // refresh returns the user to where they left off
   render();
+  if(TAX_PAGES[view]){                                 // restored onto a tax page: open its submenu
+    $("taxParent").classList.add("open");
+    $("taxSubmenu").classList.add("open");
+  }
   startSync();
 }
 $("btnLogout").onclick = ()=>{
@@ -1907,6 +1933,7 @@ function render(){
   else if(view==="reports") el.innerHTML = renderPlaceholder("Reports", "Generate compliance and filing reports for the cluster.");
   else el.innerHTML = renderTaxPage(view);
   wirePageEvents();
+  saveNav();
 }
 function renderPlaceholder(title, sub){
   return `
