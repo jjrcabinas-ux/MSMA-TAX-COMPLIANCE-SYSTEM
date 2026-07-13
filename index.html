@@ -2058,7 +2058,7 @@ window.confirmWtcSave = function(){
   };
   c.wtcRecords.push(rec);
   save(); closeOverlays();
-  wpWtcOn = false; wpWtcViewRec = rec.id;
+  wpWtcOn = false; wpWtcViewRec = null; wpCompPhase = "ask";   // land on the tab with the recorded list
   render();
   const [py, pm] = p.split("-");
   toast(`Recorded — ${MONTHS[+pm-1]} ${py}, version ${rec.version}`);
