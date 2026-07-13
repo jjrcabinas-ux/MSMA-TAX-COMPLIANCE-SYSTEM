@@ -3272,29 +3272,45 @@ function draftTotals(rec){
   const otherNT = Math.max(0, gross - (mweBasic + mweOt + thirteen + demin + contrib) - taxable);
   return { gross, mweBasic, mweOt, thirteen, demin, contrib, le250, taxable, tax, otherNT };
 }
-/* line definitions shared by the editor, the A4 popup, and the PDF: [no, label, key, kind] — kind 1 = strong, 2 = section header */
+/* line definitions shared by the editor, the A4 popup, and the PDF: [no, label, key, kind] — kind 1 = strong, 2 = section header.
+   Numbering follows the official BIR Form 1601-C (Jan 2018) items 14–36, matching the firm's eFPS draft. */
 const DRAFT_LINES = [
   ["14","Total Amount of Compensation","l14",1],
-  ["","LESS: NON-TAXABLE / EXEMPT COMPENSATION",null,2],
-  ["15A","Statutory Minimum Wage (MWEs)","l15A",0],
-  ["15B","Holiday Pay, Overtime Pay, Night Shift Differential, Hazard Pay (MWEs)","l15B",0],
-  ["15C","13th Month Pay and Other Benefits","l15C",0],
-  ["15D","De Minimis Benefits","l15D",0],
-  ["15E","SSS, GSIS, PHIC, HDMF Mandatory Contributions and Union Dues","l15E",0],
-  ["15F","Other Non-Taxable Compensation","l15F",0],
-  ["","Total Non-Taxable / Exempt Compensation","l15T",1],
-  ["16","Total Taxable Compensation","l16",1],
-  ["17","Tax Required to be Withheld","l17",1],
-  ["18","Add/(Less): Adjustment of Taxes Withheld from Previous Month(s)","l18",0],
-  ["19","Other Payments Made / Tax Paid in Previously Filed Return, if amended","l19",0],
-  ["20","Total Taxes Withheld for Remittance","l20",1],
+  ["","LESS: NON-TAXABLE COMPENSATION",null,2],
+  ["15","Statutory Minimum Wage (MWEs)","l15A",0],
+  ["16","Holiday Pay, Overtime Pay, Night Shift Differential Pay, Hazard Pay (MWEs)","l15B",0],
+  ["17","13th Month Pay and Other Benefits","l15C",0],
+  ["18","De Minimis Benefits","l15D",0],
+  ["19","SSS, GSIS, PHIC, HDMF Mandatory Contributions and Union Dues (employee's share only)","l15E",0],
+  ["20","Other Non-Taxable Compensation","l15F",0],
+  ["21","Total Non-Taxable Compensation (Sum of Items 15 to 20)","l15T",1],
+  ["22","Total Taxable Compensation (Item 14 Less Item 21)","l16",1],
+  ["23","Less: Taxable compensation not subject to withholding tax (for employees, other than MWEs, receiving P250,000 and below for the year)","le250",0],
+  ["24","Net Taxable Compensation (Item 22 Less Item 23)","l24n",1],
+  ["25","Total Taxes Withheld","l17",1],
+  ["26","Add/(Less): Adjustment of Taxes Withheld from Previous Month/s","l18",0],
+  ["27","Tax Required to be Withheld for Remittance (Sum of Items 25 and 26)","l27",1],
+  ["28","Less: Tax Remitted in Return Previously Filed, if this is an amended return","l19",0],
+  ["29","Other Remittances Made","l29",0],
+  ["30","Total Tax Remittances Made (Sum of Items 28 and 29)","l30",0],
+  ["31","Tax Still Due/(Over-remittance) (Item 27 Less Item 30)","l20",1],
   ["","ADD: PENALTIES (only if filing after the deadline)",null,2],
-  ["21","Surcharge","l21",0],
-  ["22","Interest","l22",0],
-  ["23","Compromise","l23",0],
-  ["24","Total Penalties","l24",0],
-  ["25","TOTAL AMOUNT STILL DUE / (OVERREMITTANCE)","l25",1]
+  ["32","Surcharge","l21",0],
+  ["33","Interest","l22",0],
+  ["34","Compromise","l23",0],
+  ["35","Total Penalties (Sum of Items 32 to 34)","l24",0],
+  ["36","TOTAL AMOUNT STILL DUE/(Over-remittance) (Sum of Items 31 and 35)","l25",1]
 ];
+/* older saved drafts predate the official numbering — derive the lines they lack */
+function normDraftLines(L){
+  const n = Object.assign({}, L);
+  n.le250 = n.le250 || 0;
+  n.l29 = n.l29 || 0;
+  if(n.l24n == null) n.l24n = (n.l16||0) - n.le250;
+  if(n.l27 == null) n.l27 = (n.l17||0) + (n.l18||0);
+  if(n.l30 == null) n.l30 = (n.l19||0) + n.l29;
+  return n;
+}
 function buildDraftData(c, period){
   const byP = (c.wtcRecords||[]).filter(r=>r.period===period);
   if(!byP.length) return null;
@@ -3302,15 +3318,17 @@ function buildDraftData(c, period){
   const t = draftTotals(rec);
   const d = ((c.wtcDrafts||{})[period]) || {};
   const num = k => wtcNum(d[k]);
-  const l18 = num("adj"), l19 = num("other");
-  const l20 = t.tax + l18 - l19;
+  const l18 = num("adj"), l19 = num("other"), l29 = num("other2");
+  const l27 = t.tax + l18;                             // 27 = 25 + 26
+  const l30 = l19 + l29;                               // 30 = 28 + 29
+  const l20 = l27 - l30;                               // 31 tax still due = 27 − 30
   const l21 = num("surcharge"), l22 = num("interest"), l23 = num("compromise");
-  const l24 = l21 + l22 + l23;
+  const l24 = l21 + l22 + l23;                         // 35 total penalties
   return { period, basedOn: rec.version, lines: {
     l14:t.gross, l15A:t.mweBasic, l15B:t.mweOt, l15C:t.thirteen, l15D:t.demin, l15E:t.contrib, l15F:t.otherNT,
     l15T: t.mweBasic + t.mweOt + t.thirteen + t.demin + t.contrib + t.otherNT,
-    l16:t.taxable, l17:t.tax, l18, l19, l20, l21, l22, l23, l24, l25: l20 + l24,
-    le250: t.le250 } };                                // official form line 23 (≤250K not subject to withholding)
+    l16:t.taxable, le250:t.le250, l24n: t.taxable - t.le250,
+    l17:t.tax, l18, l27, l19, l29, l30, l20, l21, l22, l23, l24, l25: l20 + l24 } };
 }
 let draftCur = null;                                   // context of the open A4 popup
 window.openDraftAdd = function(){
@@ -3341,7 +3359,7 @@ window.openDraftPreview = function(savedId){
   if(savedId){
     saved = (c.draftRecords||[]).find(r=>r.id===savedId);
     if(!saved) return;
-    data = { period: saved.period, basedOn: saved.basedOn, lines: saved.lines };
+    data = { period: saved.period, basedOn: saved.basedOn, lines: normDraftLines(saved.lines) };
   } else {
     data = buildDraftData(c, wpDraftPeriod);
     if(!data) return;
@@ -3539,25 +3557,24 @@ async function buildBirFormPdf(){
   put(460, 695.5, "X", 9, bold);                       // 11 · Category: Private
   put(231, 660, "X", 9, bold);                         // 13 · Tax relief under special law? No
   /* Part II — computation (official item numbers; row y = the printed centavo-dot baseline) */
-  const net24 = (L.l16||0) - (L.le250||0);
   [
     [628,   L.l14],                                    // 14 Total Amount of Compensation
     [601.7, L.l15A], [585.8, L.l15B], [569.8, L.l15C], // 15 MWE · 16 MWE holiday/OT · 17 13th month & other benefits
     [553.8, L.l15D], [537.9, L.l15E], [521.4, L.l15F], // 18 De minimis · 19 SSS/GSIS/PHIC/HDMF · 20 Other non-taxable
     [505.9, L.l15T],                                   // 21 Total non-taxable
     [490,   L.l16],                                    // 22 Total taxable compensation
-    [474,   L.le250||0],                               // 23 Less: not subject to withholding (≤250K/yr)
-    [458,   net24],                                    // 24 Net taxable compensation
+    [474,   L.le250],                                  // 23 Less: not subject to withholding (≤250K/yr)
+    [458,   L.l24n],                                   // 24 Net taxable compensation
     [442,   L.l17],                                    // 25 Total taxes withheld
     [426,   L.l18],                                    // 26 Add/(Less): adjustments of previous months
-    [410,   (L.l17||0)+(L.l18||0)],                    // 27 Taxes withheld for remittance
+    [410,   L.l27],                                    // 27 Tax required to be withheld for remittance
     [394,   L.l19],                                    // 28 Less: tax remitted in previously filed return
-    [380,   0],                                        // 29 Other remittances made
-    [362,   L.l19],                                    // 30 Total tax remittances made
-    [346,   L.l20],                                    // 31 Tax still due / (overremittance)
+    [380,   L.l29],                                    // 29 Other remittances made
+    [362,   L.l30],                                    // 30 Total tax remittances made
+    [346,   L.l20],                                    // 31 Tax still due / (over-remittance)
     [330,   L.l21], [314, L.l22], [298, L.l23],        // 32 Surcharge · 33 Interest · 34 Compromise
     [282,   L.l24],                                    // 35 Total penalties
-    [266,   L.l25]                                     // 36 TOTAL AMOUNT STILL DUE / (Overremittance)
+    [266,   L.l25]                                     // 36 TOTAL AMOUNT STILL DUE / (Over-remittance)
   ].forEach(r=> amt(r[0], r[1]||0));
   /* client copy of a SAVED draft is the actual return — clean; unsaved previews stay watermarked */
   if(!draftCur.saved){
@@ -3639,9 +3656,12 @@ function renderWpDraft(R, c){
   const d = ((c.wtcDrafts||{})[wpDraftPeriod]) || {};
   const num = k => wtcNum(d[k]);
   const totalExempt = t.mweBasic + t.mweOt + t.thirteen + t.demin + t.contrib + t.otherNT;
-  const line20 = t.tax + num("adj") - num("other");
+  const l24n = t.taxable - t.le250;
+  const l27v = t.tax + num("adj");                     // 27 = 25 + 26
+  const l30v = num("other") + num("other2");           // 30 = 28 + 29
+  const l31v = l27v - l30v;                            // 31 = 27 − 30
   const totalPen = num("surcharge") + num("interest") + num("compromise");
-  const line25 = line20 + totalPen;
+  const l36v = l31v + totalPen;                        // 36 = 31 + 35
   const [py, pm] = wpDraftPeriod.split("-");
   const roLine = (no, label, val, strong) => `
     <tr class="${strong?"draft-strong":""}"><td class="due ta-c" style="width:64px;">${no}</td><td>${label}</td>
@@ -3657,25 +3677,30 @@ function renderWpDraft(R, c){
       <table>
         <tbody>
           ${roLine("14","Total Amount of Compensation", t.gross, true)}
-          <tr class="draft-sec"><td></td><td colspan="2">LESS: NON-TAXABLE / EXEMPT COMPENSATION</td></tr>
-          ${roLine("15A","Statutory Minimum Wage (MWEs)", t.mweBasic)}
-          ${roLine("15B","Holiday Pay, Overtime Pay, Night Shift Differential, Hazard Pay (MWEs)", t.mweOt)}
-          ${roLine("15C","13th Month Pay and Other Benefits", t.thirteen)}
-          ${roLine("15D","De Minimis Benefits", t.demin)}
-          ${roLine("15E","SSS, GSIS, PHIC, HDMF Mandatory Contributions and Union Dues", t.contrib)}
-          ${roLine("15F","Other Non-Taxable Compensation", t.otherNT)}
-          ${roLine("","Total Non-Taxable / Exempt Compensation", totalExempt, true)}
-          ${roLine("16","Total Taxable Compensation", t.taxable, true)}
-          ${roLine("17","Tax Required to be Withheld", t.tax, true)}
-          ${edLine("18","Add/(Less): Adjustment of Taxes Withheld from Previous Month(s)","adj")}
-          ${edLine("19","Other Payments Made / Tax Paid in Previously Filed Return, if amended","other")}
-          ${roLine("20","Total Taxes Withheld for Remittance", line20, true)}
+          <tr class="draft-sec"><td></td><td colspan="2">LESS: NON-TAXABLE COMPENSATION</td></tr>
+          ${roLine("15","Statutory Minimum Wage (MWEs)", t.mweBasic)}
+          ${roLine("16","Holiday Pay, Overtime Pay, Night Shift Differential Pay, Hazard Pay (MWEs)", t.mweOt)}
+          ${roLine("17","13th Month Pay and Other Benefits", t.thirteen)}
+          ${roLine("18","De Minimis Benefits", t.demin)}
+          ${roLine("19","SSS, GSIS, PHIC, HDMF Mandatory Contributions and Union Dues (employee's share only)", t.contrib)}
+          ${roLine("20","Other Non-Taxable Compensation", t.otherNT)}
+          ${roLine("21","Total Non-Taxable Compensation (Sum of Items 15 to 20)", totalExempt, true)}
+          ${roLine("22","Total Taxable Compensation (Item 14 Less Item 21)", t.taxable, true)}
+          ${roLine("23","Less: Taxable compensation not subject to withholding tax (for employees, other than MWEs, receiving P250,000 and below for the year)", t.le250)}
+          ${roLine("24","Net Taxable Compensation (Item 22 Less Item 23)", l24n, true)}
+          ${roLine("25","Total Taxes Withheld", t.tax, true)}
+          ${edLine("26","Add/(Less): Adjustment of Taxes Withheld from Previous Month/s","adj")}
+          ${roLine("27","Tax Required to be Withheld for Remittance (Sum of Items 25 and 26)", l27v, true)}
+          ${edLine("28","Less: Tax Remitted in Return Previously Filed, if this is an amended return","other")}
+          ${edLine("29","Other Remittances Made","other2")}
+          ${roLine("30","Total Tax Remittances Made (Sum of Items 28 and 29)", l30v)}
+          ${roLine("31","Tax Still Due/(Over-remittance) (Item 27 Less Item 30)", l31v, true)}
           <tr class="draft-sec"><td></td><td colspan="2">ADD: PENALTIES (only if filing after the deadline)</td></tr>
-          ${edLine("21","Surcharge","surcharge")}
-          ${edLine("22","Interest","interest")}
-          ${edLine("23","Compromise","compromise")}
-          ${roLine("24","Total Penalties", totalPen)}
-          ${roLine("25","TOTAL AMOUNT STILL DUE / (OVERREMITTANCE)", line25, true)}
+          ${edLine("32","Surcharge","surcharge")}
+          ${edLine("33","Interest","interest")}
+          ${edLine("34","Compromise","compromise")}
+          ${roLine("35","Total Penalties (Sum of Items 32 to 34)", totalPen)}
+          ${roLine("36","TOTAL AMOUNT STILL DUE/(Over-remittance) (Sum of Items 31 and 35)", l36v, true)}
         </tbody>
       </table>
     </div>
