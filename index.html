@@ -647,6 +647,12 @@
   .wtc-scroll thead th{position:sticky; top:0; z-index:2; background:#0f172a; color:#cbd5e1; border-bottom:2px solid var(--accent);}
   .wtc-scroll td{white-space:nowrap; font-size:.82rem;}
   .wtc-note{padding:8px 16px 0; font-size:.78rem; color:var(--muted);}
+  /* editable cells for manual payroll encoding */
+  .wtc-cell{width:112px; border:1px solid transparent; background:transparent; font:inherit; font-size:.82rem; padding:5px 7px; border-radius:6px; color:var(--ink);}
+  .wtc-cell.ta-c{text-align:center;}
+  .wtc-cell.ta-r{text-align:right;}
+  .wtc-cell:hover{border-color:var(--line); background:#fff;}
+  .wtc-cell:focus{outline:none; border-color:var(--accent); background:#fff; box-shadow:0 0 0 3px var(--accent-soft);}
   th.ta-c, td.ta-c{text-align:center;}
   th.ta-r, td.ta-r{text-align:right;}
   /* toolbar download dropdown styled like a ghost button */
@@ -1828,6 +1834,19 @@ window.proceedManualCompute = function(){
   wpCompPhase = "compute";
   render();
 };
+window.setManualCell = function(empId, ci, el){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  if(!c.wtcManual) c.wtcManual = {};
+  if(!c.wtcManual[empId]) c.wtcManual[empId] = {};
+  let v = el.value.trim();
+  if((ci === 8 || ci >= 10) && v){                     // money columns: comma format on entry
+    const n = parseFloat(v.replace(/,/g,""));
+    if(!isNaN(n)){ v = n.toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2}); el.value = v; }
+  }
+  c.wtcManual[empId][ci] = v;
+  save();
+};
 function renderWorkingPaper(){
   const FREQ_LABEL = { M:"Monthly", Q:"Quarterly", A:"Annual" };
   const ordered = Object.keys(TAX_PAGES).flatMap(t=>TAX_PAGES[t].returns);   // sidebar order
@@ -2633,32 +2652,40 @@ function renderWpComputation(R, c){
 
   if(wpCompPhase === "compute"){
     const manual = !wpVerif;
-    let sheetRows;
-    if(!manual && wpVerif.rows){
-      sheetRows = wpVerif.rows;                        // hardcoded straight from the uploaded file
-    } else {
-      const sel = wpManualSel || new Set();            // manual: identity columns from the masterlist
-      sheetRows = (c.employees||[]).filter(e=>sel.has(e.id)).map(e=>{
-        const r = PAYROLL_HEADERS.map(()=> "");
-        r[3] = (e.lastName||"").toUpperCase();
-        r[4] = (e.firstName||"").toUpperCase();
-        r[5] = (e.middleName||"").toUpperCase();
-        r[6] = [e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ").toUpperCase();
-        r[7] = e.tin || "";
-        r[8] = e.dailyRate ? fmtMoney(e.dailyRate) : "";
-        return r;
-      });
-    }
     const alignFor = i => i >= 8 ? "ta-r" : (i <= 2 || i === 7 ? "ta-c" : "");
     const thead = `<tr>${PAYROLL_HEADERS.map((h,i)=>`<th class="${alignFor(i)}">${escapeHtml(h)}</th>`).join("")}</tr>`;
-    const tbody = sheetRows.length
-      ? sheetRows.map(r=>`<tr>${r.map((v,i)=>`<td class="${alignFor(i)}">${escapeHtml(v)}</td>`).join("")}</tr>`).join("")
-      : `<tr><td colspan="${PAYROLL_HEADERS.length}" style="text-align:center; color:var(--muted); padding:26px;">No payroll rows yet.</td></tr>`;
+    const emptyRow = `<tr><td colspan="${PAYROLL_HEADERS.length}" style="text-align:center; color:var(--muted); padding:26px;">No payroll rows yet.</td></tr>`;
+    let tbody, rowCount;
+    if(!manual && wpVerif.rows){
+      // hardcoded straight from the uploaded file
+      rowCount = wpVerif.rows.length;
+      tbody = rowCount
+        ? wpVerif.rows.map(r=>`<tr>${r.map((v,i)=>`<td class="${alignFor(i)}">${escapeHtml(v)}</td>`).join("")}</tr>`).join("")
+        : emptyRow;
+    } else {
+      // manual: identity columns locked from the masterlist, everything else typed in
+      const sel = wpManualSel || new Set();
+      const emps = (c.employees||[]).filter(e=>sel.has(e.id));
+      rowCount = emps.length;
+      const fmt2 = v => { const n = parseFloat(String(v ?? "").replace(/,/g,"")); return isNaN(n) ? "" : n.toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2}); };
+      tbody = rowCount ? emps.map(e=>{
+        const saved = (c.wtcManual||{})[e.id] || {};
+        const locked = {
+          3:(e.lastName||"").toUpperCase(), 4:(e.firstName||"").toUpperCase(), 5:(e.middleName||"").toUpperCase(),
+          6:[e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ").toUpperCase(), 7:e.tin||""
+        };
+        return `<tr>${PAYROLL_HEADERS.map((h,i)=>{
+          if(i >= 3 && i <= 7) return `<td class="${alignFor(i)}">${escapeHtml(locked[i])}</td>`;
+          const val = saved[i] != null ? saved[i] : (i === 8 ? fmt2(e.dailyRate) : "");
+          return `<td class="${alignFor(i)}" style="padding:3px 5px;"><input class="wtc-cell ${i>=8?"ta-r":"ta-c"}" value="${escapeHtml(val)}"${i<=2?' placeholder="MM/DD/YYYY"':''} onchange="setManualCell('${e.id}',${i},this)"></td>`;
+        }).join("")}</tr>`;
+      }).join("") : emptyRow;
+    }
     return head + `
       <div class="card">
-        <div class="card-title">Standard Payroll Data <span class="pill">${sheetRows.length} row${sheetRows.length===1?"":"s"}</span></div>
+        <div class="card-title">Standard Payroll Data <span class="pill">${rowCount} row${rowCount===1?"":"s"}</span></div>
         <div class="wtc-note">${manual
-          ? `<b>Manual mode</b> — names, TINs, and daily rates carried from the Employee Masterlist; payroll figures to be encoded from the client's records.`
+          ? `<b>Manual mode</b> — names, TINs, and daily rates carried from the Employee Masterlist. Click any cell to encode the payroll figures; entries save automatically.`
           : `Values copied as-is from <b>${escapeHtml(wpVerif.fileName)}</b> — hardcoded, nothing is recomputed.`}</div>
         <div class="wtc-scroll"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
       </div>
