@@ -1313,6 +1313,24 @@
   </div>
 </div>
 
+<!-- Company summary detail -->
+<div class="overlay" id="compDetailOverlay" onclick="if(event.target===this) closeOverlays();">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(820px, 94vw); max-width:none;">
+    <header>
+      <h2 id="compDetailTitle">Company summary</h2>
+      <button class="xclose" data-close="compDetailOverlay">✕</button>
+    </header>
+    <div class="body" style="display:block;">
+      <div id="compDetailBody"></div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="compDetailOverlay">Close</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
 <!-- Confirm saving the draft: the pipeline advances and locks -->
 <div class="overlay" id="draftConfirmOverlay">
   <div class="modal" role="dialog" aria-modal="true">
@@ -2506,6 +2524,65 @@ function scopeYears(){
 }
 function scopeLabel(scope){ return scope === "M" ? "Monthly returns" : scope === "Q" ? "Quarterly returns" : "All periods"; }
 window.setDashScope = function(v){ dashScope = v; attnExpanded = false; render(); };
+/* Company summary detail: every tracked filing of one client, most urgent first */
+window.openCompanySummary = function(cid){
+  const c = db.clients.find(x=>x.id===cid);
+  if(!c) return;
+  const items = [];
+  Object.keys(RETURNS).forEach(ret=>{
+    if(!(c.taxTypes && c.taxTypes[RETURNS[ret].tax])) return;
+    const prefix = ret + "|";
+    Object.keys(db.records).forEach(k=>{
+      if(!k.startsWith(prefix)) return;
+      const rec = db.records[k][cid];
+      if(!rec) return;
+      const p = parsePeriodKey(ret, k.slice(prefix.length));
+      const f = flagFor(ret, c, p, rec);
+      const dl = deadlineFor(ret, c, p);
+      const stageWord = rec.stage === 0 ? "Not started"
+        : rec.stage >= STEPS.length ? "Archived ✓" : STEPS[rec.stage-1].label;
+      items.push({ ret, p, pk: k.slice(prefix.length), f, dl, stageWord });
+    });
+  });
+  items.sort((a,b)=> a.f.rank - b.f.rank || ymdInt(a.dl.file.y, a.dl.file.m, a.dl.file.d) - ymdInt(b.dl.file.y, b.dl.file.m, b.dl.file.d));
+  const stats = { total: items.length, filed:0, prog:0, amber:0, red:0 };
+  items.forEach(i=>{
+    if(i.f.rank >= 3) stats.filed++; else stats.prog++;
+    if(i.f.cls === "amber") stats.amber++;
+    if(i.f.cls === "red") stats.red++;
+  });
+  $("compDetailTitle").textContent = c.name;
+  $("compDetailBody").innerHTML = `
+    <div class="cmeta" style="margin:-4px 0 10px;">TIN ${escapeHtml(c.tin||"—")} · ${escapeHtml(c.preparer||"unassigned")}${c.reviewer?" / "+escapeHtml(c.reviewer):""} · ${escapeHtml(c.channel||"")}</div>
+    <div class="stat-row" style="margin-bottom:12px;">
+      <div class="stat"><div class="n">${stats.total}</div><div class="l">Tracked filings</div></div>
+      <div class="stat flag-green"><div class="n">${stats.filed}</div><div class="l">Filed</div></div>
+      <div class="stat"><div class="n">${stats.prog}</div><div class="l">In progress</div></div>
+      <div class="stat ${stats.amber?"flag-amber":""}"><div class="n">${stats.amber}</div><div class="l">Needs follow-up</div></div>
+      <div class="stat ${stats.red?"flag-red":""}"><div class="n">${stats.red}</div><div class="l">At risk / overdue</div></div>
+    </div>
+    ${items.length ? `
+    <div class="table-scroll" style="max-height:52vh; overflow-y:auto;">
+    <table>
+      <thead><tr><th>Return</th><th>Period</th><th>Deadline</th><th>Last step done</th><th>Flag</th></tr></thead>
+      <tbody>${items.map(i=>`
+        <tr class="crow" onclick="compJump('${i.ret}','${i.pk}')" title="Open ${RETURNS[i.ret].form} · ${periodLabel(i.ret, i.p)}">
+          <td><b>${RETURNS[i.ret].form}</b><div class="cmeta">${escapeHtml(RETURNS[i.ret].name)}</div></td>
+          <td class="due">${periodLabel(i.ret, i.p)}</td>
+          <td class="due">${fmtYmd(i.dl.file)}</td>
+          <td>${escapeHtml(i.stageWord)}</td>
+          <td><span class="flagchip ${i.f.cls}">${i.f.text}</span></td>
+        </tr>`).join("")}</tbody>
+    </table>
+    </div>` : `<div class="attn-empty" style="min-height:120px;"><div>No tracked filings yet for this company.</div></div>`}`;
+  resetModalPosition("compDetailOverlay");
+  $("compDetailOverlay").classList.add("open");
+};
+window.compJump = function(ret, pk){
+  closeOverlays();
+  periods[ret] = parsePeriodKey(ret, pk);
+  gotoView(RETURNS[ret].tax, ret);
+};
 window.setFilterChan = function(v){ filterChan = v; render(); };
 window.setFilterFlag = function(v){ filterFlag = v; render(); };
 window.toggleClientDetails = function(id){
@@ -2673,8 +2750,8 @@ function renderDashboard(){
         <tbody>${compRows.map(e=>{
           const pctC = e.total ? Math.round(100*e.filed/e.total) : 0;
           return `
-          <tr>
-            <td><div class="cname" onclick="openClient('${e.c.id}')">${escapeHtml(e.c.name)}</div>
+          <tr class="crow" onclick="openCompanySummary('${e.c.id}')">
+            <td><div class="cname" onclick="event.stopPropagation(); openClient('${e.c.id}')">${escapeHtml(e.c.name)}</div>
                 <div class="cmeta">${escapeHtml(e.c.preparer||"unassigned")}</div></td>
             <td>${e.total || "—"}</td>
             <td><b class="cs-green">${e.filed}</b></td>
