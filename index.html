@@ -1427,7 +1427,7 @@ function dbKey(){ return `msma_taxcomp_v1_${cluster}`; }
 /* remember where the user is so a refresh brings them back */
 function navKey(){ return `msma_nav_v1_${cluster}`; }
 function saveNav(){
-  store.set(navKey(), JSON.stringify({ view, wpReturn, wpClient, wpSection, activeReturn, periods }));
+  store.set(navKey(), JSON.stringify({ view, wpReturn, wpClient, wpSection, wpScope, activeReturn, periods }));
 }
 function restoreNav(){
   let s = null;
@@ -1435,6 +1435,7 @@ function restoreNav(){
   if(!s || !s.view) return;
   activeReturn = s.activeReturn || {};
   periods = s.periods || {};
+  if(["all","M","Q","A"].includes(s.wpScope)) wpScope = s.wpScope;
   if(s.view === "wpdetail"){
     if(!(s.wpReturn && RETURNS[s.wpReturn])){ view = "workingpaper"; return; }
     wpReturn = s.wpReturn;
@@ -1725,6 +1726,7 @@ let recCtx = null;               // {ret, period, clientId}
 let editingClientId = null;
 let searchQ = "", filterFlag = "", filterChan = "";
 let dashScope = "all";           // Main Tracker card filter: "all" | "M" (monthly) | "Q" (quarterly)
+let wpScope = "all";             // Working Paper card filter: "all" | "M" | "Q" | "A"
 let expandedClientId = null;     // masterlist row whose detail panel is open
 let wpReturn = null;             // return key open in the Working Paper module
 let wpClient = null;             // client id selected inside that working paper
@@ -2310,9 +2312,11 @@ window.wtcKey = function(ev, el){
     save(); toast(`Cleared ${cells.length} cells`);
   }
 };
+window.setWpScope = function(v){ wpScope = v; render(); };
 function renderWorkingPaper(){
   const FREQ_LABEL = { M:"Monthly", Q:"Quarterly", A:"Annual" };
-  const ordered = Object.keys(TAX_PAGES).flatMap(t=>TAX_PAGES[t].returns);   // sidebar order
+  const ordered = Object.keys(TAX_PAGES).flatMap(t=>TAX_PAGES[t].returns)    // sidebar order
+    .filter(ret=> wpScope === "all" || RETURNS[ret].freq === wpScope);
   const cards = ordered.map(ret=>{
     const R = RETURNS[ret];
     return `
@@ -2331,9 +2335,12 @@ function renderWorkingPaper(){
   return `
     <div class="page-head">
       <h1>Working Paper</h1>
+      <div class="scope-select">Period
+        ${ddSelect("ddWpScope", [ {v:"M",label:"Monthly"}, {v:"Q",label:"Quarterly"}, {v:"A",label:"Annual"}, {v:"all",label:"All Period"} ], wpScope, "setWpScope")}
+      </div>
       <div class="sub">Supporting working papers per BIR return · ${cluster} Cluster · click a return to open</div>
     </div>
-    <div class="ret-grid">${cards}</div>`;
+    ${cards ? `<div class="ret-grid">${cards}</div>` : `<div class="card"><div class="attn-empty" style="min-height:150px;"><div>No returns under this period filter.</div></div></div>`}`;
 }
 function renderWpDetail(){
   const R = RETURNS[wpReturn];
