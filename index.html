@@ -1100,11 +1100,11 @@
       </div>
       <div class="field">
         <label>Monthly rate (₱)</label>
-        <input id="eMonthly" type="number" min="0" step="0.01" placeholder="0.00">
+        <input id="eMonthly" type="text" inputmode="decimal" placeholder="0.00">
       </div>
       <div class="field">
         <label>Daily rate (₱)</label>
-        <input id="eDaily" type="number" min="0" step="0.01" placeholder="0.00">
+        <input id="eDaily" type="text" inputmode="decimal" placeholder="0.00">
       </div>
     </div>
     <footer>
@@ -2135,8 +2135,8 @@ window.openEmp = function(id){
   $("ePos").value = e.position || "";
   $("eHired").value = e.dateHired || "";
   $("eTerm").value = e.dateTerminated || "";
-  $("eMonthly").value = e.monthlyRate || "";
-  $("eDaily").value = e.dailyRate || "";
+  $("eMonthly").value = addThousands(e.monthlyRate || "");
+  $("eDaily").value = addThousands(e.dailyRate || "");
   setEmpStatus(e.status || "Active");
   $("btnDeleteEmp").style.display = id ? "" : "none";
   resetModalPosition("empOverlay");
@@ -2152,6 +2152,25 @@ function getEmpStatus(){
 document.querySelectorAll("#empStatusChips .tax-chip").forEach(ch=>{
   ch.onclick = ()=> setEmpStatus(ch.dataset.st);
 });
+/* peso amounts: live thousands separators (integer part only, decimals untouched) */
+function addThousands(v){
+  const raw = String(v ?? "").replace(/[^\d.]/g, "");
+  if(!raw) return "";
+  const dot = raw.indexOf(".");
+  const int = (dot === -1 ? raw : raw.slice(0, dot)).replace(/^0+(?=\d)/, "");
+  const dec = dot === -1 ? "" : "." + raw.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + dec;
+}
+function wireAmountInput(el){
+  el.addEventListener("input", ()=>{
+    const fromRight = el.value.length - (el.selectionStart ?? el.value.length);
+    el.value = addThousands(el.value);
+    const pos = Math.max(0, el.value.length - fromRight);
+    el.setSelectionRange(pos, pos);
+  });
+}
+wireAmountInput($("eMonthly"));
+wireAmountInput($("eDaily"));
 $("btnSaveEmp").onclick = ()=>{
   const c = db.clients.find(x=>x.id===wpClient);
   if(!c) return;
@@ -2165,7 +2184,7 @@ $("btnSaveEmp").onclick = ()=>{
     name, lastName, firstName, middleName,
     tin:$("eTin").value.trim(), address:$("eAddr").value.trim(), position:$("ePos").value.trim(),
     dateHired:$("eHired").value, dateTerminated:$("eTerm").value,
-    monthlyRate:$("eMonthly").value.trim(), dailyRate:$("eDaily").value.trim(),
+    monthlyRate:$("eMonthly").value.replace(/,/g,"").trim(), dailyRate:$("eDaily").value.replace(/,/g,"").trim(),
     status:getEmpStatus()
   };
   if(!c.employees) c.employees = [];
