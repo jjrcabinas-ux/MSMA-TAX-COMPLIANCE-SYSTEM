@@ -1057,15 +1057,23 @@
       <button class="xclose" data-close="empOverlay">✕</button>
     </header>
     <div class="body">
-      <div class="field full">
-        <label>Employee name</label>
-        <input id="eName" placeholder="Last name, First name MI.">
+      <div class="field">
+        <label>Last name</label>
+        <input id="eLast" placeholder="e.g. Dela Cruz">
+      </div>
+      <div class="field">
+        <label>First name</label>
+        <input id="eFirst" placeholder="e.g. Juan">
+      </div>
+      <div class="field">
+        <label>Middle name</label>
+        <input id="eMiddle" placeholder="e.g. Protacio">
       </div>
       <div class="field">
         <label>TIN</label>
         <input id="eTin" placeholder="000-000-000-000">
       </div>
-      <div class="field">
+      <div class="field full">
         <label>Position</label>
         <input id="ePos" placeholder="e.g. Accounting Staff">
       </div>
@@ -2077,7 +2085,9 @@ window.openEmp = function(id){
   editingEmpId = id || null;
   const e = (c.employees||[]).find(x=>x.id===id) || {};
   $("empModalTitle").textContent = id ? "Edit employee" : "Add employee";
-  $("eName").value = e.name || "";
+  $("eLast").value = e.lastName || e.name || "";   // older records fall back to the combined name
+  $("eFirst").value = e.firstName || "";
+  $("eMiddle").value = e.middleName || "";
   $("eTin").value = e.tin || "";
   $("ePos").value = e.position || "";
   setEmpStatus(e.status || "Active");
@@ -2098,9 +2108,13 @@ document.querySelectorAll("#empStatusChips .tax-chip").forEach(ch=>{
 $("btnSaveEmp").onclick = ()=>{
   const c = db.clients.find(x=>x.id===wpClient);
   if(!c) return;
-  const name = $("eName").value.trim();
-  if(!name){ toast("Employee name is required"); $("eName").focus(); return; }
-  const data = { name, tin:$("eTin").value.trim(), position:$("ePos").value.trim(), status:getEmpStatus() };
+  const lastName = $("eLast").value.trim();
+  const firstName = $("eFirst").value.trim();
+  const middleName = $("eMiddle").value.trim();
+  if(!lastName){ toast("Last name is required"); $("eLast").focus(); return; }
+  if(!firstName){ toast("First name is required"); $("eFirst").focus(); return; }
+  const name = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}${middleName ? " " + middleName.toUpperCase() : ""}`;
+  const data = { name, lastName, firstName, middleName, tin:$("eTin").value.trim(), position:$("ePos").value.trim(), status:getEmpStatus() };
   if(!c.employees) c.employees = [];
   if(editingEmpId){
     Object.assign(c.employees.find(x=>x.id===editingEmpId), data);
