@@ -2031,7 +2031,7 @@ window.updateWtcSaveNote = function(){
   $("wtcRemarksField").style.display = existing.length ? "" : "none";
   $("wtcSaveNote").innerHTML =
     `You are recording the Withholding Tax Computation of <b>${escapeHtml(c.name)}</b> for the period <b>${label}</b> — please make sure this is the month you are computing for.<br><br>
-    Once saved and recorded, the output becomes <b>subject for review by your direct supervisor</b>. If any changes are required, the system will create a new version of the recorded computation with remarks describing the changes.` +
+    Recorded computations are locked. If any changes are required later, the system will create a new version of the recorded computation with remarks describing the changes.` +
     (existing.length ? `<br><br>This period already has <b>version ${existing.length}</b> on record — this save will be recorded as <b>version ${existing.length + 1}</b>, and remarks describing the changes are required.` : "");
 };
 window.confirmWtcSave = function(){
@@ -2054,7 +2054,7 @@ window.confirmWtcSave = function(){
     id: "w" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     period: p, version: existing.length + 1, freq: wpCompFreq,
     savedAt: new Date().toISOString(), savedBy: cluster,
-    status: "For supervisor review", remarks, rows
+    remarks, rows
   };
   c.wtcRecords.push(rec);
   save(); closeOverlays();
@@ -2868,7 +2868,7 @@ function renderWpComputation(R, c){
       return head + `
         <div class="card">
           <div class="card-title">Recorded Withholding Tax Computation — ${MONTHS[+rm-1]} ${ry} <span class="pill">version ${rec.version}</span></div>
-          <div class="wtc-note">Saved ${fmtDateMDY(rec.savedAt.slice(0,10))} by ${escapeHtml(rec.savedBy||"")} · ${escapeHtml(rec.freq)} payroll · <span class="flagchip amber">${escapeHtml(rec.status)}</span>${rec.remarks ? ` · <b>Remarks:</b> ${escapeHtml(rec.remarks)}` : ""}</div>
+          <div class="wtc-note">Saved ${fmtDateMDY(rec.savedAt.slice(0,10))} by ${escapeHtml(rec.savedBy||"")} · ${escapeHtml(rec.freq)} payroll${rec.remarks ? ` · <b>Remarks:</b> ${escapeHtml(rec.remarks)}` : ""}</div>
           <div class="wtc-scroll"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
         </div>
         <div class="toolbar" style="margin-top:4px;">
@@ -2888,7 +2888,7 @@ function renderWpComputation(R, c){
         <div class="card-title">Recorded computations <span class="pill">${recs.length}</span></div>
         <div class="table-scroll">
         <table>
-          <thead><tr><th>Period</th><th class="ta-c">Version</th><th>Saved</th><th>By</th><th class="ta-c">Frequency</th><th>Status</th><th>Remarks</th></tr></thead>
+          <thead><tr><th>Period</th><th class="ta-c">Version</th><th>Saved</th><th>By</th><th class="ta-c">Frequency</th><th>Remarks</th></tr></thead>
           <tbody>${recs.map(r=>{
             const [ry, rm] = String(r.period).split("-");
             return `
@@ -2898,7 +2898,6 @@ function renderWpComputation(R, c){
               <td class="due">${fmtDateMDY(String(r.savedAt).slice(0,10))}</td>
               <td class="due">${escapeHtml(r.savedBy||"—")}</td>
               <td class="due ta-c">${escapeHtml(r.freq||"—")}</td>
-              <td><span class="flagchip amber">${escapeHtml(r.status||"For supervisor review")}</span></td>
               <td style="max-width:280px; white-space:normal;">${escapeHtml(r.remarks||"—")}</td>
             </tr>`;
           }).join("")}</tbody>
