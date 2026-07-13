@@ -648,6 +648,10 @@
     font-size:inherit; font-weight:400; color:var(--ink-soft);
     border-radius:8px; padding:9px 16px; background:var(--surface);
   }
+  .verif-issue{
+    font-size:.84rem; color:var(--red); padding:2px 0; line-height:1.45;
+  }
+  .verif-issue + .verif-issue{border-top:1px dashed var(--line);}
   .imp-note{font-size:.88rem; color:var(--ink-soft); margin-bottom:10px; line-height:1.5;}
   .imp-cols{
     font-size:.72rem; color:var(--muted); background:var(--paper);
@@ -1057,6 +1061,30 @@
     <footer>
       <div class="right">
         <button class="btn ghost" data-close="contactOverlay">Close</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ============================================================
+     PAYROLL DATA prompt (Withholding Tax Computation)
+============================================================ -->
+<div class="overlay" id="payrollAskOverlay">
+  <div class="modal contact-modal" role="dialog" aria-modal="true">
+    <header>
+      <h2>Standard payroll data</h2>
+      <button class="xclose" data-close="payrollAskOverlay">✕</button>
+    </header>
+    <div class="body">
+      <div class="field full">
+        <p class="imp-note">Did the client provide the <b>standard payroll data</b> (the firm's payroll template)?</p>
+        <p class="imp-note" style="color:var(--muted);">If yes, you'll upload the file next and the system will verify it against the Employee Masterlist before computation.</p>
+      </div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" onclick="payrollAnswer(false)">Not yet</button>
+        <button class="btn" onclick="payrollAnswer(true)">Yes — verify the data</button>
       </div>
     </footer>
   </div>
@@ -1534,6 +1562,8 @@ let wpClient = null;             // client id selected inside that working paper
 let wpSearchQ = "";              // company search inside a working paper
 let wpSection = null;            // module open inside a company's working paper
 let editingEmpId = null;         // employee being edited in the masterlist modal
+let wpCompPhase = "ask";         // WTC computation: ask | nodata | upload | results | compute
+let wpVerif = null;              // last payroll-verification result
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1740,8 +1770,32 @@ window.openWp = function(ret){ wpReturn = ret; wpClient = null; wpSection = null
 window.backToWp = function(){ wpReturn = null; wpClient = null; wpSection = null; view = "workingpaper"; render(); };
 window.openWpClient = function(cid){ wpClient = cid; wpSection = null; render(); };
 window.backToWpCompanies = function(){ wpClient = null; wpSection = null; render(); };
-window.openWpSection = function(key){ wpSection = key; render(); };
+window.openWpSection = function(key){
+  wpSection = key;
+  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; }
+  render();
+  if(key === "computation") openPayrollAsk();
+};
 window.backToWpSections = function(){ wpSection = null; render(); };
+/* pipeline hook: Data Received on 1601-C jumps straight into the computation */
+window.goToWtcComputation = function(cid){
+  wpReturn = "1601C"; wpClient = cid; wpSection = "computation";
+  wpCompPhase = "ask"; wpVerif = null; wpSearchQ = "";
+  view = "wpdetail";
+  $("taxParent").classList.remove("open");
+  $("taxSubmenu").classList.remove("open");
+  render();
+  openPayrollAsk();
+};
+window.openPayrollAsk = function(){
+  resetModalPosition("payrollAskOverlay");
+  $("payrollAskOverlay").classList.add("open");
+};
+window.payrollAnswer = function(yes){
+  closeOverlays();
+  wpCompPhase = yes ? "upload" : "nodata";
+  render();
+};
 function renderWorkingPaper(){
   const FREQ_LABEL = { M:"Monthly", Q:"Quarterly", A:"Annual" };
   const ordered = Object.keys(TAX_PAGES).flatMap(t=>TAX_PAGES[t].returns);   // sidebar order
@@ -1779,9 +1833,10 @@ function renderWpDetail(){
     /* 1601-C has a structured module menu */
     if(wpReturn === "1601C"){
       if(wpSection === "employees") return renderWpEmployees(R, c);
+      if(wpSection === "computation") return renderWpComputation(R, c);
       const MODULES = [
         {key:"employees",     label:"Employee Masterlist",          desc:"Company employees covered by payroll withholding", ready:true},
-        {key:"computation",   label:"Withholding Tax Computation",  desc:"Monthly compensation withholding computation",     ready:false},
+        {key:"computation",   label:"Withholding Tax Computation",  desc:"Verify payroll data, then compute withholding",     ready:true},
         {key:"draft",         label:"Draft Return",                 desc:"Pre-filled 1601-C draft for review",               ready:false},
         {key:"annualization", label:"Annualization",                desc:"Year-end annualized withholding adjustment",       ready:false},
         {key:"dat",           label:"DAT File",                     desc:"Alphalist DAT file generation",                    ready:false}
@@ -2408,6 +2463,162 @@ window.downloadEmpMasterlist = async function(fmt){
   }
 };
 
+/* ---- 1601-C Withholding Tax Computation: payroll verification ---- */
+function renderWpComputation(R, c){
+  const head = `
+    <div class="page-head">
+      <h1>Withholding Tax Computation</h1>
+      <button class="btn ghost wp-back" onclick="backToWpSections()">← ${R.form} · ${escapeHtml(c.name)}</button>
+      <div class="sub">${escapeHtml(c.name)} · payroll data is verified against the Employee Masterlist before computing</div>
+    </div>`;
+
+  if(wpCompPhase === "nodata") return head + `
+    <div class="card"><div class="attn-empty" style="min-height:210px;">
+      <div>No standard payroll data from <b>${escapeHtml(c.name)}</b> yet.<br>
+      Request it through the 1601-C pipeline (Data Request step) and come back once the client sends the accomplished template.</div>
+      <button class="btn" style="margin-top:14px;" onclick="wpCompPhase='upload'; render();">Data received — verify it now</button>
+    </div></div>`;
+
+  if(wpCompPhase === "upload") return head + `
+    <div class="card"><div class="attn-empty" style="min-height:230px;">
+      <div><b>Upload the client's payroll file</b> (.xlsx, .xls, or .csv).<br>The system will check every row against the Employee Masterlist:</div>
+      <p class="imp-cols" style="margin-top:12px;">1 · Employee exists in the masterlist&nbsp;&nbsp;&nbsp;2 · TIN matches&nbsp;&nbsp;&nbsp;3 · Daily rate matches</p>
+      <button class="btn" onclick="$('payrollFile').click()">Choose payroll file…</button>
+      <input type="file" id="payrollFile" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handlePayrollVerify(this)">
+    </div></div>`;
+
+  if(wpCompPhase === "results" && wpVerif){
+    const v = wpVerif;
+    const clean = v.errRows.length === 0;
+    const stats = `
+      <div class="stat-row">
+        <div class="stat"><div class="n">${v.total}</div><div class="l">Rows checked · ${escapeHtml(v.fileName)}</div></div>
+        <div class="stat flag-green"><div class="n">${v.ok}</div><div class="l">Matched the masterlist</div></div>
+        <div class="stat ${v.errRows.length?"flag-red":""}"><div class="n">${v.errRows.length}</div><div class="l">With discrepancies</div></div>
+      </div>`;
+    const missingNote = v.missing.length ? `
+      <div class="card"><div class="card-title">Active employees not in the file <span class="pill">${v.missing.length}</span></div>
+        <div style="padding:12px 16px; font-size:.88rem; color:var(--ink-soft);">${v.missing.map(escapeHtml).join(" · ")}</div>
+      </div>` : "";
+    if(clean) return head + stats + `
+      <div class="card"><div class="attn-empty" style="min-height:190px;">
+        <svg class="attn-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
+        <div>All <b>${v.ok}</b> employees match the masterlist — names, TINs, and daily rates are accurate.</div>
+        <button class="btn" style="margin-top:14px;" onclick="wpCompPhase='compute'; render();">Proceed with computation →</button>
+      </div></div>` + missingNote;
+    return head + stats + `
+      <div class="card">
+        <div class="card-title">Discrepancies to fix <span class="pill">${v.errRows.length}</span></div>
+        <table>
+          <thead><tr><th style="min-width:220px;">Employee (from file)</th><th>Findings</th></tr></thead>
+          <tbody>${v.errRows.map(r=>`
+            <tr>
+              <td><div class="cname">${escapeHtml(r.name)}</div></td>
+              <td>${r.issues.map(i=>`<div class="verif-issue">${escapeHtml(i)}</div>`).join("")}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+      </div>
+      ${missingNote}
+      <div class="toolbar" style="margin-top:4px;">
+        <div style="flex:1;"></div>
+        <button class="btn ghost" onclick="wpCompPhase='upload'; render();">Re-upload corrected file</button>
+        <button class="btn" onclick="openWpSection('employees')">Update Employee Masterlist</button>
+      </div>`;
+  }
+
+  if(wpCompPhase === "compute") return head + `
+    <div class="card"><div class="attn-empty" style="min-height:200px;">
+      <div>Payroll data for <b>${escapeHtml(c.name)}</b> is verified and locked in ✓<br>
+      The withholding computation engine is the next build step — tell us the computation sheet you use and we'll model it.</div>
+      <button class="btn ghost" style="margin-top:14px;" onclick="wpCompPhase='results'; render();">← Back to verification results</button>
+    </div></div>`;
+
+  /* default: waiting for the popup answer */
+  return head + `
+    <div class="card"><div class="attn-empty" style="min-height:190px;">
+      <div>First, confirm whether <b>${escapeHtml(c.name)}</b> provided the standard payroll data.</div>
+      <button class="btn" style="margin-top:14px;" onclick="openPayrollAsk()">Answer the prompt</button>
+    </div></div>`;
+}
+
+window.handlePayrollVerify = async function(input){
+  const file = input.files && input.files[0];
+  input.value = "";
+  if(!file) return;
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
+  let rows;
+  try{
+    const wb = XLSX.read(await file.arrayBuffer());
+    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:"", raw:false });
+  }catch(e){ toast("Could not read that file — is it a valid Excel/CSV?"); return; }
+  const norm = s => String(s||"").toLowerCase().replace(/[^a-z]/g,"");
+  const hIdx = rows.findIndex(r=>{
+    const h = r.map(norm);
+    const hasName = (h.some(x=>x.includes("lastname")) && h.some(x=>x.includes("firstname"))) ||
+                    h.some(x=>x.includes("employeename") || x.includes("fullname"));
+    return hasName && (h.some(x=>x.includes("tin")) || h.some(x=>x.includes("dailyrate")));
+  });
+  if(hIdx === -1){ toast("Header row not found — the file needs employee name (or last/first name), TIN, and daily rate columns"); return; }
+  const header = rows[hIdx].map(norm);
+  const col = k => header.findIndex(h=>h.includes(k));
+  const iL = col("lastname"), iF = col("firstname"), iM = col("middlename"),
+        iN = col("employeename") > -1 ? col("employeename") : col("fullname"),
+        iT = col("tin"), iD = col("dailyrate");
+  const normName = s => String(s||"").toUpperCase().replace(/[^A-Z ]/g," ").replace(/\s+/g," ").trim();
+  const digits = s => String(s||"").replace(/\D/g,"");
+  const num = s => parseFloat(String(s||"").replace(/[^\d.]/g,""));
+  // masterlist lookup: accept LAST FIRST MIDDLE, FIRST MIDDLE LAST, or the stored combined name
+  const map = new Map();
+  (c.employees||[]).forEach(e=>{
+    [ `${e.lastName||""} ${e.firstName||""} ${e.middleName||""}`,
+      `${e.firstName||""} ${e.middleName||""} ${e.lastName||""}`,
+      e.name||"" ].map(normName).filter(Boolean).forEach(k=>{ if(!map.has(k)) map.set(k, e); });
+  });
+  const matched = new Set();
+  let total = 0, ok = 0;
+  const errRows = [];
+  rows.slice(hIdx + 1).forEach(r=>{
+    let dispName = "", key = "";
+    if(iL > -1 && iF > -1){
+      const L = String(r[iL]||"").trim(), F = String(r[iF]||"").trim(), M = iM > -1 ? String(r[iM]||"").trim() : "";
+      if(!L && !F) return;
+      dispName = `${L.toUpperCase()}, ${F.toUpperCase()}${M ? " " + M.toUpperCase() : ""}`;
+      key = normName(`${L} ${F} ${M}`);
+    } else {
+      const n = String(r[iN]||"").trim();
+      if(!n) return;
+      dispName = n.toUpperCase();
+      key = normName(n);
+    }
+    total++;
+    const emp = map.get(key);
+    const issues = [];
+    if(!emp){
+      issues.push("Not found in the Employee Masterlist");
+    } else {
+      matched.add(emp.id);
+      if(iT > -1){
+        const ft = digits(r[iT]), mt = digits(emp.tin);
+        if(ft !== mt) issues.push(`TIN mismatch — file: ${String(r[iT]||"").trim()||"(blank)"} · masterlist: ${emp.tin||"(blank)"}`);
+      }
+      if(iD > -1){
+        const fd = num(r[iD]), md = num(emp.dailyRate);
+        const bothBlank = isNaN(fd) && isNaN(md);
+        if(!bothBlank && (isNaN(fd) !== isNaN(md) || Math.abs(fd - md) > 0.005))
+          issues.push(`Daily rate mismatch — file: ${isNaN(fd)?"(blank)":"₱"+fd.toLocaleString("en-PH",{minimumFractionDigits:2})} · masterlist: ${isNaN(md)?"(blank)":"₱"+md.toLocaleString("en-PH",{minimumFractionDigits:2})}`);
+      }
+    }
+    if(issues.length) errRows.push({ name: dispName, issues }); else ok++;
+  });
+  const missing = (c.employees||[]).filter(e=>e.status!=="Separated" && !matched.has(e.id)).map(e=>e.name);
+  wpVerif = { fileName:file.name, total, ok, errRows, missing };
+  wpCompPhase = "results";
+  render();
+  toast(errRows.length ? `Verification found ${errRows.length} discrepanc${errRows.length===1?"y":"ies"}` : "Verification passed — all rows match");
+};
+
 /* -------------------- Masterlist -------------------- */
 function renderMasterlist(){
   const q = searchQ.toLowerCase();
@@ -2674,6 +2885,11 @@ function advanceStage(ret, clientId){
   rec.stage++;
   toast(`${RETURNS[ret].form}: ${step.label} · ${rec.dates[step.key]}`);
   save(); render();
+  // Data Received on 1601-C flows straight into the Withholding Tax Computation
+  if(ret === "1601C" && rec.stage === 2){
+    toast("Data received — opening the Withholding Tax Computation");
+    setTimeout(()=> goToWtcComputation(clientId), 400);
+  }
 }
 window.stepRec = function(ret, clientId, dir){
   const rec = getRecord(ret, periods[ret], clientId);
