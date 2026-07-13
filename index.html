@@ -2875,7 +2875,8 @@ function renderWpComputation(R, c){
     const thead = `<tr>${PAYROLL_HEADERS.map((h,i)=>`<th class="${alignFor(i)}">${escapeHtml(h)}</th>`).join("")}${WTC_COMP_HEADERS.map((h,i)=>`<th class="wtc-ic ${icAlign(i)}">${escapeHtml(h)}</th>`).join("")}</tr>`;
     const tbody = rowCount ? baseRows.map(br=>{
       const cr = wtcComputeRow(br, wpCompFreq);
-      return `<tr>${br.vals.map((v,i)=>`<td class="${alignFor(i)}">${escapeHtml(v)}</td>`).join("")}${cr.map((v,i)=>`<td class="wtc-ic ${icAlign(i)}${i===2&&v!=="MATCH"?" wtc-warn":""}">${escapeHtml(v)}</td>`).join("")}</tr>`;
+      // once computing, empty amount cells read as 0
+      return `<tr>${br.vals.map((v,i)=>`<td class="${alignFor(i)}">${escapeHtml(i >= 8 && String(v).trim() === "" ? "0.00" : v)}</td>`).join("")}${cr.map((v,i)=>`<td class="wtc-ic ${icAlign(i)}${i===2&&v!=="MATCH"?" wtc-warn":""}">${escapeHtml(v)}</td>`).join("")}</tr>`;
     }).join("") : `<tr><td colspan="${PAYROLL_HEADERS.length + WTC_COMP_HEADERS.length}" style="text-align:center; color:var(--muted); padding:26px;">No payroll rows yet.</td></tr>`;
     return head + `
       <div class="card">
