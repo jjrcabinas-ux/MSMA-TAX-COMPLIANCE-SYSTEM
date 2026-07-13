@@ -654,6 +654,10 @@
   .wtc-cell:hover{border-color:var(--line); background:#fff;}
   .wtc-cell:focus{outline:none; border-color:var(--accent); background:#fff; box-shadow:0 0 0 3px var(--accent-soft);}
   .wtc-cell.selcell{background:var(--accent-soft); border-color:var(--accent);}
+  /* IC computation columns appended to the right of the payroll sheet */
+  .wtc-scroll thead th.wtc-ic{background:var(--accent-deep); color:#fff;}
+  .wtc-scroll td.wtc-ic{background:#eff6ff;}
+  .wtc-scroll td.wtc-warn{color:#e2445c; font-weight:600;}
   .wtc-scroll.dragging{user-select:none;}
   .wtc-scroll.dragging .wtc-cell{cursor:cell;}
   th.ta-c, td.ta-c{text-align:center;}
@@ -1119,7 +1123,7 @@
     <div class="body">
       <div class="field full">
         <p class="imp-note">Upload an Excel file (.xlsx, .xls, or .csv) with these columns:</p>
-        <p class="imp-cols">LAST NAME · FIRST NAME · MIDDLE NAME · TIN · ADDRESS · POSITION · DATE HIRED · DATE TERMINATED · MONTHLY RATE · DAILY RATE · STATUS</p>
+        <p class="imp-cols">LAST NAME · FIRST NAME · MIDDLE NAME · TIN · ADDRESS · POSITION · DATE HIRED · DATE TERMINATED · MONTHLY RATE · DAILY RATE · TYPE (T/M/N) · STATUS</p>
         <p class="imp-note">Not sure of the format? Download the template below, fill it out, then upload it here.</p>
         <button type="button" class="add-contact" onclick="downloadEmpTemplate()">⬇ Download the template (.xlsx)</button>
       </div>
@@ -1166,6 +1170,14 @@
       <div class="field">
         <label>Position</label>
         <input id="ePos" placeholder="e.g. Accounting Staff">
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <div class="tax-chips" id="empTypeChips">
+          <button type="button" class="tax-chip" data-ty="T" title="Taxable">T — Taxable</button>
+          <button type="button" class="tax-chip" data-ty="M" title="Minimum wage earner">M — Minimum</button>
+          <button type="button" class="tax-chip" data-ty="N" title="Not taxable">N — Not taxable</button>
+        </div>
       </div>
       <div class="field">
         <label>Employment status</label>
@@ -1582,6 +1594,8 @@ let editingEmpId = null;         // employee being edited in the masterlist moda
 let wpCompPhase = "ask";         // WTC computation: ask | nodata | upload | results | manual-select | compute
 let wpVerif = null;              // last payroll-verification result
 let wpManualSel = null;          // Set of employee ids included in a manual computation
+let wpWtcOn = false;             // true once "Proceed with computation" appends the IC columns
+let wpCompFreq = "Semi-monthly"; // payroll frequency driving the withholding table brackets
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1790,7 +1804,7 @@ window.openWpClient = function(cid){ wpClient = cid; wpSection = null; render();
 window.backToWpCompanies = function(){ wpClient = null; wpSection = null; render(); };
 window.openWpSection = function(key){
   wpSection = key;
-  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; }
+  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; }
   render();
   if(key === "computation") openPayrollAsk();
 };
@@ -1798,7 +1812,7 @@ window.backToWpSections = function(){ wpSection = null; render(); };
 /* pipeline hook: Data Received on 1601-C jumps straight into the computation */
 window.goToWtcComputation = function(cid){
   wpReturn = "1601C"; wpClient = cid; wpSection = "computation";
-  wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpSearchQ = "";
+  wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpSearchQ = "";
   view = "wpdetail";
   $("taxParent").classList.remove("open");
   $("taxSubmenu").classList.remove("open");
@@ -1877,6 +1891,61 @@ function migrateWtcManual(c){
     }
   });
   c.wtcManualV = 2;
+}
+
+/* ---- Withholding tax computation (IC columns) ---- */
+const WTC_COMP_HEADERS = [
+  "NET PAY - IC","DIFF","REMARKS","REPORT (Y/N)","TYPE",
+  "GROSS COMPENSATION","MWE BASIC","MWE OT","13TH MO. & OB","DE MINIMIS",
+  "SSS / PHIC / HDMF","≤250K","TAXABLE","TAX WITHHELD"
+];
+/* BIR revised withholding tax table (RR 11-2018, rates effective Jan 1, 2023):
+   [bracket floor, tax on floor, rate on excess over floor] */
+const WTC_TAX_TABLES = {
+  "Daily":        [[0,0,0],[685,0,.15],[1096,61.65,.20],[2192,280.85,.25],[5479,1102.60,.30],[21918,6034.30,.35]],
+  "Weekly":       [[0,0,0],[4808,0,.15],[7692,432.60,.20],[15385,1971.20,.25],[38462,7740.45,.30],[153846,42355.65,.35]],
+  "Semi-monthly": [[0,0,0],[10417,0,.15],[16667,937.50,.20],[33333,4270.70,.25],[83333,16770.70,.30],[333333,91770.70,.35]],
+  "Monthly":      [[0,0,0],[20833,0,.15],[33333,1875.00,.20],[66667,8541.80,.25],[166667,33541.80,.30],[666667,183541.80,.35]]
+};
+function wtcTax(freq, taxable){
+  const t = WTC_TAX_TABLES[freq] || WTC_TAX_TABLES["Semi-monthly"];
+  let b = t[0];
+  for(const br of t){ if(taxable >= br[0]) b = br; else break; }
+  return Math.max(0, b[1] + b[2] * (taxable - b[0]));
+}
+function wtcNum(v){                                    // "(1,750.00)" → -1750; blanks → 0
+  const s = String(v == null ? "" : v).trim();
+  if(!s) return 0;
+  const neg = /^\(.*\)$/.test(s) || /^-/.test(s);
+  const n = parseFloat(s.replace(/[(),₱ ]/g,"").replace(/^-/,""));
+  return isNaN(n) ? 0 : (neg ? -n : n);
+}
+function wtcFmt(n){                                    // accounting style: negatives in parens
+  const a = Math.abs(n).toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2});
+  return n < -0.004 ? `(${a})` : a;
+}
+/* br = {vals: 31 payroll strings, emp: masterlist employee|null, tin} */
+function wtcComputeRow(br, freq){
+  const n = i => wtcNum(br.vals[i]);
+  const A = i => Math.abs(n(i));
+  const type = (br.emp && br.emp.type) || "T";
+  const netIC = n(21) - (A(22)+A(23)+A(24)+A(25)+A(26)+A(27)+A(28)+A(29));
+  const diff = n(30) - netIC;
+  const remarks = Math.abs(diff) <= 0.01 ? "MATCH" : "FOR CHECKING";
+  const report = String(br.tin||"").replace(/\D/g,"") ? "Y" : "N";
+  const grossComp = n(10)+n(11)+n(12)+n(13)+n(14)+n(15)+n(16) - (A(17)+A(18)+A(19)+A(20));
+  const mweBasic = type === "M" ? n(10) : 0;
+  const mweOt = type === "M" ? n(11) : 0;
+  const thirteenOb = n(14) + n(16);                    // 13th month pay + other incentives (OB)
+  const deMin = n(15);
+  const contrib = A(22)+A(23)+A(24);                   // SSS + HDMF + PHIC, absolute
+  const taxable = type === "N" ? 0 : Math.max(0, grossComp - mweBasic - mweOt - thirteenOb - deMin - contrib);
+  const thr = { "Daily":685, "Weekly":4808, "Semi-monthly":10417, "Monthly":20833 }[freq] || 10417;
+  const le250 = taxable > 0 && taxable <= thr ? taxable : null;   // within the 250K-annual exempt bracket
+  const tax = type === "T" ? wtcTax(freq, taxable) : 0;
+  return [wtcFmt(netIC), wtcFmt(diff), remarks, report, type,
+          wtcFmt(grossComp), wtcFmt(mweBasic), wtcFmt(mweOt), wtcFmt(thirteenOb), wtcFmt(deMin),
+          wtcFmt(contrib), le250 == null ? "" : wtcFmt(le250), wtcFmt(taxable), wtcFmt(tax)];
 }
 
 /* ---- WTC manual sheet: Excel-style range selection + block paste ---- */
@@ -2350,6 +2419,7 @@ function renderWpEmployees(R, c){
       <td class="due">${escapeHtml(fmtDateMDY(e.dateTerminated)||"—")}</td>
       <td class="due ta-r">${fmtMoney(e.monthlyRate)}</td>
       <td class="due ta-r">${fmtMoney(e.dailyRate)}</td>
+      <td class="due ta-c" title="T = taxable · M = minimum wage · N = not taxable">${escapeHtml(e.type||"—")}</td>
       <td><span class="flagchip ${e.status==="Separated"?"grey":"green"}">${escapeHtml(e.status||"Active")}</span></td>
     </tr>`;
   }).join("");
@@ -2379,7 +2449,7 @@ function renderWpEmployees(R, c){
         <thead><tr>
           <th style="width:44px;">#</th><th>Last name</th><th>First name</th><th>Middle name</th><th>Full name</th>
           <th class="ta-c">TIN</th><th>Position</th><th>Address</th><th>Date hired</th><th>Date terminated</th>
-          <th class="ta-r">Monthly rate</th><th class="ta-r">Daily rate</th><th>Status</th>
+          <th class="ta-r">Monthly rate</th><th class="ta-r">Daily rate</th><th class="ta-c">Type</th><th>Status</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -2405,6 +2475,7 @@ window.openEmp = function(id){
   $("eTerm").value = e.dateTerminated || "";
   $("eMonthly").value = addThousands(e.monthlyRate || "");
   $("eDaily").value = addThousands(e.dailyRate || "");
+  setEmpType(e.type || "T");
   setEmpStatus(e.status || "Active");
   $("btnDeleteEmp").style.display = id ? "" : "none";
   resetModalPosition("empOverlay");
@@ -2419,6 +2490,16 @@ function getEmpStatus(){
 }
 document.querySelectorAll("#empStatusChips .tax-chip").forEach(ch=>{
   ch.onclick = ()=> setEmpStatus(ch.dataset.st);
+});
+function setEmpType(v){
+  document.querySelectorAll("#empTypeChips .tax-chip").forEach(ch=> ch.classList.toggle("selected", ch.dataset.ty===v));
+}
+function getEmpType(){
+  const s = document.querySelector("#empTypeChips .tax-chip.selected");
+  return s ? s.dataset.ty : "T";
+}
+document.querySelectorAll("#empTypeChips .tax-chip").forEach(ch=>{
+  ch.onclick = ()=> setEmpType(ch.dataset.ty);
 });
 /* peso amounts: live thousands separators (integer part only, decimals untouched) */
 function addThousands(v){
@@ -2453,7 +2534,7 @@ $("btnSaveEmp").onclick = ()=>{
     tin:$("eTin").value.trim(), address:$("eAddr").value.trim(), position:$("ePos").value.trim(),
     dateHired:$("eHired").value, dateTerminated:$("eTerm").value,
     monthlyRate:$("eMonthly").value.replace(/,/g,"").trim(), dailyRate:$("eDaily").value.replace(/,/g,"").trim(),
-    status:getEmpStatus()
+    type:getEmpType(), status:getEmpStatus()
   };
   if(!c.employees) c.employees = [];
   if(editingEmpId){
@@ -2489,11 +2570,11 @@ function loadSheetJS(){
 window.downloadEmpTemplate = async function(){
   try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
   const ws = XLSX.utils.aoa_to_sheet([
-    ["LAST NAME","FIRST NAME","MIDDLE NAME","TIN","ADDRESS","POSITION","DATE HIRED","DATE TERMINATED","MONTHLY RATE","DAILY RATE","STATUS"],
-    ["DELA CRUZ","JUAN","PROTACIO","123-456-789-000","123 MABINI ST., CEBU CITY","ACCOUNTING STAFF","01/15/2024","","25000","1136.36","Active"],
-    ["SANTOS","MARIA","LOPEZ","987-654-321-000","45 RIZAL AVE., MANDAUE CITY","HR SUPERVISOR","06/01/2022","03/31/2026","32000","1454.55","Separated"]
+    ["LAST NAME","FIRST NAME","MIDDLE NAME","TIN","ADDRESS","POSITION","DATE HIRED","DATE TERMINATED","MONTHLY RATE","DAILY RATE","TYPE (T/M/N)","STATUS"],
+    ["DELA CRUZ","JUAN","PROTACIO","123-456-789-000","123 MABINI ST., CEBU CITY","ACCOUNTING STAFF","01/15/2024","","25000","1136.36","T","Active"],
+    ["SANTOS","MARIA","LOPEZ","987-654-321-000","45 RIZAL AVE., MANDAUE CITY","HR SUPERVISOR","06/01/2022","03/31/2026","32000","1454.55","M","Separated"]
   ]);
-  ws["!cols"] = [{wch:18},{wch:16},{wch:16},{wch:18},{wch:30},{wch:22},{wch:14},{wch:16},{wch:14},{wch:12},{wch:12}];
+  ws["!cols"] = [{wch:18},{wch:16},{wch:16},{wch:18},{wch:30},{wch:22},{wch:14},{wch:16},{wch:14},{wch:12},{wch:12},{wch:12}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Employees");
   XLSX.writeFile(wb, "MSMA_Employee_Masterlist_Template.xlsx");
@@ -2550,7 +2631,8 @@ window.handleEmpImport = async function(input){
   const iL = col("lastname"), iF = col("firstname"), iM = col("middlename"),
         iT = col("tin"), iP = col("position"), iS = col("status"),
         iA = col("address"), iH = col("datehired"), iX = col("dateterminated"),
-        iMo = col("monthlyrate"), iD = col("dailyrate");
+        iMo = col("monthlyrate"), iD = col("dailyrate"),
+        iTy = header.findIndex(h => h === "type" || h.startsWith("typet"));   // "TYPE" / "TYPE (T/M/N)"
   if(!c.employees) c.employees = [];
   let added = 0, skipped = 0;
   rows.slice(hIdx + 1).forEach(r=>{
@@ -2569,6 +2651,7 @@ window.handleEmpImport = async function(input){
       dateTerminated: iX > -1 ? toISODate(r[iX]) : "",
       monthlyRate: iMo > -1 ? String(r[iMo]||"").replace(/[₱, ]/g,"") : "",
       dailyRate: iD > -1 ? String(r[iD]||"").replace(/[₱, ]/g,"") : "",
+      type: iTy > -1 && /^[TMN]/i.test(String(r[iTy]||"").trim()) ? String(r[iTy]).trim()[0].toUpperCase() : "T",
       status: iS > -1 && /separat/i.test(String(r[iS]||"")) ? "Separated" : "Active"
     });
     added++;
@@ -2595,7 +2678,7 @@ function loadJsPDF(){
   }
   return jsPdfPromise;
 }
-const EMP_EXPORT_HEADERS = ["#","LAST NAME","FIRST NAME","MIDDLE NAME","FULL NAME","TIN","POSITION","ADDRESS","DATE HIRED","DATE TERMINATED","MONTHLY RATE","DAILY RATE","STATUS"];
+const EMP_EXPORT_HEADERS = ["#","LAST NAME","FIRST NAME","MIDDLE NAME","FULL NAME","TIN","POSITION","ADDRESS","DATE HIRED","DATE TERMINATED","MONTHLY RATE","DAILY RATE","TYPE","STATUS"];
 function empExportRows(emps){
   return emps.map((e,i)=>[
     i+1,
@@ -2603,7 +2686,7 @@ function empExportRows(emps){
     [e.firstName,e.middleName,e.lastName].filter(Boolean).join(" ").toUpperCase() || (e.name||""),
     e.tin||"", e.position||"", e.address||"", fmtDateMDY(e.dateHired), fmtDateMDY(e.dateTerminated),
     e.monthlyRate ? +e.monthlyRate : "", e.dailyRate ? +e.dailyRate : "",
-    e.status||"Active"
+    e.type||"", e.status||"Active"
   ]);
 }
 window.downloadEmpMasterlist = async function(fmt){
@@ -2635,7 +2718,7 @@ window.downloadEmpMasterlist = async function(fmt){
       body: empExportRows(emps).map(r=>r.map((v,ci)=> (ci===10||ci===11) && v!=="" ? Number(v).toLocaleString("en-PH",{minimumFractionDigits:2}) : v)),
       styles:{ fontSize:6.5, cellPadding:1.5 },
       headStyles:{ fillColor:[59,130,246], fontSize:6.5 },
-      columnStyles:{ 5:{halign:"center"}, 10:{halign:"right"}, 11:{halign:"right"} }
+      columnStyles:{ 5:{halign:"center"}, 10:{halign:"right"}, 11:{halign:"right"}, 12:{halign:"center"} }
     });
     doc.save(base + ".pdf");
   }
@@ -2750,6 +2833,63 @@ function renderWpComputation(R, c){
       </div>`;
   }
 
+  if(wpCompPhase === "compute" && wpWtcOn){
+    const manual = !wpVerif;
+    const alignFor = i => i >= 8 ? "ta-r" : (i <= 2 || i === 7 ? "ta-c" : "");
+    const fmt2 = v => { const x = parseFloat(String(v ?? "").replace(/,/g,"")); return isNaN(x) ? "" : x.toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2}); };
+    /* collect rows as {vals[31], emp|null, tin} */
+    let baseRows;
+    if(!manual && wpVerif.rows){
+      const normName = s => String(s||"").toUpperCase().replace(/[^A-Z ]/g," ").replace(/\s+/g," ").trim();
+      const map = new Map();
+      (c.employees||[]).forEach(e=>{
+        [ `${e.lastName||""} ${e.firstName||""} ${e.middleName||""}`,
+          `${e.firstName||""} ${e.middleName||""} ${e.lastName||""}`,
+          e.name||"" ].map(normName).filter(Boolean).forEach(k=>{ if(!map.has(k)) map.set(k, e); });
+      });
+      baseRows = wpVerif.rows.map(r=>{
+        const emp = map.get(normName(`${r[3]} ${r[4]} ${r[5]}`)) || map.get(normName(r[6])) || null;
+        return { vals: r, emp, tin: r[7] || (emp && emp.tin) || "" };
+      });
+    } else {
+      migrateWtcManual(c);
+      const sel = wpManualSel || new Set();
+      baseRows = (c.employees||[]).filter(e=>sel.has(e.id)).map(e=>{
+        const saved = (c.wtcManual||{})[e.id] || {};
+        const vals = PAYROLL_HEADERS.map((h,i)=>{
+          if(i === 3) return (e.lastName||"").toUpperCase();
+          if(i === 4) return (e.firstName||"").toUpperCase();
+          if(i === 5) return (e.middleName||"").toUpperCase();
+          if(i === 6) return [e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ").toUpperCase();
+          if(i === 7) return e.tin||"";
+          return saved[i] != null ? saved[i] : (i === 8 ? fmt2(e.dailyRate) : "");
+        });
+        return { vals, emp: e, tin: e.tin||"" };
+      });
+    }
+    const rowCount = baseRows.length;
+    const icAlign = i => (i >= 2 && i <= 4) ? "ta-c" : "ta-r";
+    const thead = `<tr>${PAYROLL_HEADERS.map((h,i)=>`<th class="${alignFor(i)}">${escapeHtml(h)}</th>`).join("")}${WTC_COMP_HEADERS.map((h,i)=>`<th class="wtc-ic ${icAlign(i)}">${escapeHtml(h)}</th>`).join("")}</tr>`;
+    const tbody = rowCount ? baseRows.map(br=>{
+      const cr = wtcComputeRow(br, wpCompFreq);
+      return `<tr>${br.vals.map((v,i)=>`<td class="${alignFor(i)}">${escapeHtml(v)}</td>`).join("")}${cr.map((v,i)=>`<td class="wtc-ic ${icAlign(i)}${i===2&&v!=="MATCH"?" wtc-warn":""}">${escapeHtml(v)}</td>`).join("")}</tr>`;
+    }).join("") : `<tr><td colspan="${PAYROLL_HEADERS.length + WTC_COMP_HEADERS.length}" style="text-align:center; color:var(--muted); padding:26px;">No payroll rows yet.</td></tr>`;
+    return head + `
+      <div class="card">
+        <div class="card-title">Withholding Tax Computation <span class="pill">${rowCount} row${rowCount===1?"":"s"}</span></div>
+        <div class="wtc-note" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <b>Payroll frequency</b>
+          ${["Daily","Weekly","Semi-monthly","Monthly"].map(f=>`<button class="btn${wpCompFreq===f?"":" ghost"}" style="padding:3px 12px; font-size:.76rem;" onclick="wpCompFreq='${f}'; render();">${f}</button>`).join("")}
+          <span style="margin-left:auto;">TYPE from the masterlist: T = taxable · M = minimum wage · N = not taxable</span>
+        </div>
+        <div class="wtc-scroll"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+      </div>
+      <div class="toolbar" style="margin-top:4px;">
+        <div style="flex:1; font-size:.82rem; color:var(--muted);">TAX WITHHELD follows the BIR revised withholding tax table (effective 2023) for the selected frequency.</div>
+        <button class="btn ghost" onclick="wpWtcOn=false; render();">← Back to payroll encoding</button>
+      </div>`;
+  }
+
   if(wpCompPhase === "compute"){
     const manual = !wpVerif;
     const alignFor = i => i >= 8 ? "ta-r" : (i <= 2 || i === 7 ? "ta-c" : "");
@@ -2796,10 +2936,11 @@ function renderWpComputation(R, c){
         <div class="wtc-scroll"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
       </div>
       <div class="toolbar" style="margin-top:4px;">
-        <div style="flex:1; font-size:.82rem; color:var(--muted);">The withholding computation engine is the next build step.</div>
+        <div style="flex:1;"></div>
         ${manual
           ? `<button class="btn ghost" onclick="wpCompPhase='manual-select'; render();">← Back to employee selection</button>`
           : `<button class="btn ghost" onclick="wpCompPhase='results'; render();">← Back to verification results</button>`}
+        ${rowCount ? `<button class="btn" onclick="wpWtcOn=true; render();">Proceed with computation →</button>` : ""}
       </div>`;
   }
 
