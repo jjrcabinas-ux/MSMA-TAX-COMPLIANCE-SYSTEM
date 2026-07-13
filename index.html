@@ -3432,7 +3432,14 @@ function commitDraft(remarks){
     toast(`Pipeline updated — ${MONTHS[+dm-1]} ${dy} 1601-C is now Return Drafted`);
   }
   save(); closeOverlays();
-  wpDraftPeriod = null; render();
+  // land on the 1601-C pipeline for the drafted period
+  wpDraftPeriod = null; wpDraftView = null;
+  activeReturn["WTC"] = "1601C";
+  periods["1601C"] = { y:+dy, m:+dm };
+  view = "WTC";
+  $("taxParent").classList.add("open");
+  $("taxSubmenu").classList.add("open");
+  render();
   toast(`Draft return saved for approval — version ${existing.length + 1}`);
 }
 window.confirmDraftReason = function(){
