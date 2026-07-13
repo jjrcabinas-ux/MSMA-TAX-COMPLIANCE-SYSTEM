@@ -639,6 +639,8 @@
   .wp-card .rc-meta{margin-bottom:0;}
   .wp-card .wp-open{margin-left:auto; font-size:.8rem; color:var(--accent-deep);}
   .wp-back{margin-left:auto; padding:7px 14px; font-size:.82rem;}
+  .table-scroll{overflow-x:auto;}
+  .table-scroll td{white-space:nowrap;}
   /* dashboard fills remaining height so it never looks half-loaded (item 11) */
   .dash{display:flex; flex-direction:column; min-height:calc(100vh - 140px);}
   .dash .attn-card{flex:1 1 auto; display:flex; flex-direction:column;}
@@ -1051,7 +1053,7 @@
      EMPLOYEE modal (1601-C working paper)
 ============================================================ -->
 <div class="overlay" id="empOverlay">
-  <div class="modal contact-modal" role="dialog" aria-modal="true">
+  <div class="modal" role="dialog" aria-modal="true">
     <header>
       <h2 id="empModalTitle">Add employee</h2>
       <button class="xclose" data-close="empOverlay">✕</button>
@@ -1074,15 +1076,35 @@
         <input id="eTin" placeholder="000-000-000-000">
       </div>
       <div class="field full">
+        <label>Address</label>
+        <input id="eAddr" placeholder="Residential address">
+      </div>
+      <div class="field">
         <label>Position</label>
         <input id="ePos" placeholder="e.g. Accounting Staff">
       </div>
-      <div class="field full">
+      <div class="field">
         <label>Employment status</label>
         <div class="tax-chips" id="empStatusChips">
           <button type="button" class="tax-chip" data-st="Active">Active</button>
           <button type="button" class="tax-chip" data-st="Separated">Separated</button>
         </div>
+      </div>
+      <div class="field">
+        <label>Date hired</label>
+        <input id="eHired" type="date">
+      </div>
+      <div class="field">
+        <label>Date terminated</label>
+        <input id="eTerm" type="date">
+      </div>
+      <div class="field">
+        <label>Monthly rate (₱)</label>
+        <input id="eMonthly" type="number" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>Daily rate (₱)</label>
+        <input id="eDaily" type="number" min="0" step="0.01" placeholder="0.00">
       </div>
     </div>
     <footer>
@@ -2050,14 +2072,25 @@ function renderDashboard(){
 /* ---- 1601-C Employee Masterlist ---- */
 function renderWpEmployees(R, c){
   const emps = c.employees || [];
-  const rows = emps.map((e,i)=>`
+  const rows = emps.map((e,i)=>{
+    const fullName = [e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ").toUpperCase() || escapeHtml(e.name||"—");
+    return `
     <tr class="crow" onclick="openEmp('${e.id}')">
       <td class="cmeta">${i+1}</td>
-      <td><div class="cname">${escapeHtml(e.name)}</div></td>
+      <td>${escapeHtml((e.lastName||"").toUpperCase()||"—")}</td>
+      <td>${escapeHtml((e.firstName||"").toUpperCase()||"—")}</td>
+      <td>${escapeHtml((e.middleName||"").toUpperCase()||"—")}</td>
+      <td><div class="cname">${escapeHtml(fullName)}</div></td>
       <td class="due">${escapeHtml(e.tin||"—")}</td>
       <td>${escapeHtml(e.position||"—")}</td>
+      <td>${escapeHtml(e.address||"—")}</td>
+      <td class="due">${escapeHtml(e.dateHired||"—")}</td>
+      <td class="due">${escapeHtml(e.dateTerminated||"—")}</td>
+      <td class="due">${fmtMoney(e.monthlyRate)}</td>
+      <td class="due">${fmtMoney(e.dailyRate)}</td>
       <td><span class="flagchip ${e.status==="Separated"?"grey":"green"}">${escapeHtml(e.status||"Active")}</span></td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
   return `
     <div class="page-head">
       <h1>Employee Masterlist</h1>
@@ -2073,10 +2106,16 @@ function renderWpEmployees(R, c){
     </div>
     <div class="card">
       ${emps.length ? `
+      <div class="table-scroll">
       <table>
-        <thead><tr><th style="width:44px;">#</th><th>Employee name</th><th>TIN</th><th>Position</th><th>Status</th></tr></thead>
+        <thead><tr>
+          <th style="width:44px;">#</th><th>Last name</th><th>First name</th><th>Middle name</th><th>Full name</th>
+          <th>TIN</th><th>Position</th><th>Address</th><th>Date hired</th><th>Date terminated</th>
+          <th>Monthly rate</th><th>Daily rate</th><th>Status</th>
+        </tr></thead>
         <tbody>${rows}</tbody>
-      </table>` : `
+      </table>
+      </div>` : `
       <div class="attn-empty" style="min-height:170px;">
         <div>No employees encoded yet for <b>${escapeHtml(c.name)}</b>.<br>Click <b>+ Add employee</b> to start the masterlist.</div>
       </div>`}
@@ -2092,7 +2131,12 @@ window.openEmp = function(id){
   $("eFirst").value = e.firstName || "";
   $("eMiddle").value = e.middleName || "";
   $("eTin").value = e.tin || "";
+  $("eAddr").value = e.address || "";
   $("ePos").value = e.position || "";
+  $("eHired").value = e.dateHired || "";
+  $("eTerm").value = e.dateTerminated || "";
+  $("eMonthly").value = e.monthlyRate || "";
+  $("eDaily").value = e.dailyRate || "";
   setEmpStatus(e.status || "Active");
   $("btnDeleteEmp").style.display = id ? "" : "none";
   resetModalPosition("empOverlay");
@@ -2117,7 +2161,13 @@ $("btnSaveEmp").onclick = ()=>{
   if(!lastName){ toast("Last name is required"); $("eLast").focus(); return; }
   if(!firstName){ toast("First name is required"); $("eFirst").focus(); return; }
   const name = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}${middleName ? " " + middleName.toUpperCase() : ""}`;
-  const data = { name, lastName, firstName, middleName, tin:$("eTin").value.trim(), position:$("ePos").value.trim(), status:getEmpStatus() };
+  const data = {
+    name, lastName, firstName, middleName,
+    tin:$("eTin").value.trim(), address:$("eAddr").value.trim(), position:$("ePos").value.trim(),
+    dateHired:$("eHired").value, dateTerminated:$("eTerm").value,
+    monthlyRate:$("eMonthly").value.trim(), dailyRate:$("eDaily").value.trim(),
+    status:getEmpStatus()
+  };
   if(!c.employees) c.employees = [];
   if(editingEmpId){
     Object.assign(c.employees.find(x=>x.id===editingEmpId), data);
@@ -2152,11 +2202,11 @@ function loadSheetJS(){
 window.downloadEmpTemplate = async function(){
   try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
   const ws = XLSX.utils.aoa_to_sheet([
-    ["LAST NAME","FIRST NAME","MIDDLE NAME","TIN","POSITION","STATUS"],
-    ["DELA CRUZ","JUAN","PROTACIO","123-456-789-000","ACCOUNTING STAFF","Active"],
-    ["SANTOS","MARIA","LOPEZ","987-654-321-000","HR SUPERVISOR","Separated"]
+    ["LAST NAME","FIRST NAME","MIDDLE NAME","TIN","ADDRESS","POSITION","DATE HIRED","DATE TERMINATED","MONTHLY RATE","DAILY RATE","STATUS"],
+    ["DELA CRUZ","JUAN","PROTACIO","123-456-789-000","123 MABINI ST., CEBU CITY","ACCOUNTING STAFF","2024-01-15","","25000","1136.36","Active"],
+    ["SANTOS","MARIA","LOPEZ","987-654-321-000","45 RIZAL AVE., MANDAUE CITY","HR SUPERVISOR","2022-06-01","2026-03-31","32000","1454.55","Separated"]
   ]);
-  ws["!cols"] = [{wch:18},{wch:16},{wch:16},{wch:18},{wch:24},{wch:12}];
+  ws["!cols"] = [{wch:18},{wch:16},{wch:16},{wch:18},{wch:30},{wch:22},{wch:14},{wch:16},{wch:14},{wch:12},{wch:12}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Employees");
   XLSX.writeFile(wb, "MSMA_Employee_Masterlist_Template.xlsx");
@@ -2172,7 +2222,7 @@ window.handleEmpImport = async function(input){
   let rows;
   try{
     const wb = XLSX.read(await file.arrayBuffer());
-    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:"" });
+    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:"", raw:false });
   }catch(e){ toast("Could not read that file — is it a valid Excel/CSV?"); return; }
   const norm = s => String(s||"").toLowerCase().replace(/[^a-z]/g,"");
   const hIdx = rows.findIndex(r => r.some(x=>norm(x).includes("lastname")) && r.some(x=>norm(x).includes("firstname")));
@@ -2180,7 +2230,9 @@ window.handleEmpImport = async function(input){
   const header = rows[hIdx].map(norm);
   const col = key => header.findIndex(h => h.includes(key));
   const iL = col("lastname"), iF = col("firstname"), iM = col("middlename"),
-        iT = col("tin"), iP = col("position"), iS = col("status");
+        iT = col("tin"), iP = col("position"), iS = col("status"),
+        iA = col("address"), iH = col("datehired"), iX = col("dateterminated"),
+        iMo = col("monthlyrate"), iD = col("dailyrate");
   if(!c.employees) c.employees = [];
   let added = 0, skipped = 0;
   rows.slice(hIdx + 1).forEach(r=>{
@@ -2193,7 +2245,12 @@ window.handleEmpImport = async function(input){
       name: `${last.toUpperCase()}, ${first.toUpperCase()}${middle ? " " + middle.toUpperCase() : ""}`,
       lastName: last, firstName: first, middleName: middle,
       tin: iT > -1 ? String(r[iT]||"").trim() : "",
+      address: iA > -1 ? String(r[iA]||"").trim() : "",
       position: iP > -1 ? String(r[iP]||"").trim() : "",
+      dateHired: iH > -1 ? String(r[iH]||"").trim() : "",
+      dateTerminated: iX > -1 ? String(r[iX]||"").trim() : "",
+      monthlyRate: iMo > -1 ? String(r[iMo]||"").replace(/[₱, ]/g,"") : "",
+      dailyRate: iD > -1 ? String(r[iD]||"").replace(/[₱, ]/g,"") : "",
       status: iS > -1 && /separat/i.test(String(r[iS]||"")) ? "Separated" : "Active"
     });
     added++;
