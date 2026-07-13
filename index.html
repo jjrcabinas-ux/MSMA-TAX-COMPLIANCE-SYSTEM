@@ -2109,6 +2109,23 @@ function renderDashboard(){
 }
 
 /* ---- 1601-C Employee Masterlist ---- */
+// dates are stored ISO (yyyy-mm-dd, required by date inputs) and displayed MM/DD/YYYY
+function toISODate(v){
+  const s = String(v||"").trim();
+  if(!s) return "";
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(m){
+    let y = m[3]; if(y.length === 2) y = (+y > 50 ? "19" : "20") + y;
+    return `${y}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;
+  }
+  return s;
+}
+function fmtDateMDY(v){
+  const m = String(v||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : (v || "");
+}
 function renderWpEmployees(R, c){
   const emps = c.employees || [];
   const rows = emps.map((e,i)=>{
@@ -2123,8 +2140,8 @@ function renderWpEmployees(R, c){
       <td class="due ta-c">${escapeHtml(e.tin||"—")}</td>
       <td>${escapeHtml(e.position||"—")}</td>
       <td>${escapeHtml(e.address||"—")}</td>
-      <td class="due">${escapeHtml(e.dateHired||"—")}</td>
-      <td class="due">${escapeHtml(e.dateTerminated||"—")}</td>
+      <td class="due">${escapeHtml(fmtDateMDY(e.dateHired)||"—")}</td>
+      <td class="due">${escapeHtml(fmtDateMDY(e.dateTerminated)||"—")}</td>
       <td class="due ta-r">${fmtMoney(e.monthlyRate)}</td>
       <td class="due ta-r">${fmtMoney(e.dailyRate)}</td>
       <td><span class="flagchip ${e.status==="Separated"?"grey":"green"}">${escapeHtml(e.status||"Active")}</span></td>
@@ -2267,8 +2284,8 @@ window.downloadEmpTemplate = async function(){
   try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
   const ws = XLSX.utils.aoa_to_sheet([
     ["LAST NAME","FIRST NAME","MIDDLE NAME","TIN","ADDRESS","POSITION","DATE HIRED","DATE TERMINATED","MONTHLY RATE","DAILY RATE","STATUS"],
-    ["DELA CRUZ","JUAN","PROTACIO","123-456-789-000","123 MABINI ST., CEBU CITY","ACCOUNTING STAFF","2024-01-15","","25000","1136.36","Active"],
-    ["SANTOS","MARIA","LOPEZ","987-654-321-000","45 RIZAL AVE., MANDAUE CITY","HR SUPERVISOR","2022-06-01","2026-03-31","32000","1454.55","Separated"]
+    ["DELA CRUZ","JUAN","PROTACIO","123-456-789-000","123 MABINI ST., CEBU CITY","ACCOUNTING STAFF","01/15/2024","","25000","1136.36","Active"],
+    ["SANTOS","MARIA","LOPEZ","987-654-321-000","45 RIZAL AVE., MANDAUE CITY","HR SUPERVISOR","06/01/2022","03/31/2026","32000","1454.55","Separated"]
   ]);
   ws["!cols"] = [{wch:18},{wch:16},{wch:16},{wch:18},{wch:30},{wch:22},{wch:14},{wch:16},{wch:14},{wch:12},{wch:12}];
   const wb = XLSX.utils.book_new();
@@ -2315,8 +2332,8 @@ window.handleEmpImport = async function(input){
       tin: iT > -1 ? String(r[iT]||"").trim() : "",
       address: iA > -1 ? String(r[iA]||"").trim() : "",
       position: iP > -1 ? String(r[iP]||"").trim() : "",
-      dateHired: iH > -1 ? String(r[iH]||"").trim() : "",
-      dateTerminated: iX > -1 ? String(r[iX]||"").trim() : "",
+      dateHired: iH > -1 ? toISODate(r[iH]) : "",
+      dateTerminated: iX > -1 ? toISODate(r[iX]) : "",
       monthlyRate: iMo > -1 ? String(r[iMo]||"").replace(/[₱, ]/g,"") : "",
       dailyRate: iD > -1 ? String(r[iD]||"").replace(/[₱, ]/g,"") : "",
       status: iS > -1 && /separat/i.test(String(r[iS]||"")) ? "Separated" : "Active"
@@ -2351,7 +2368,7 @@ function empExportRows(emps){
     i+1,
     (e.lastName||"").toUpperCase(), (e.firstName||"").toUpperCase(), (e.middleName||"").toUpperCase(),
     [e.firstName,e.middleName,e.lastName].filter(Boolean).join(" ").toUpperCase() || (e.name||""),
-    e.tin||"", e.position||"", e.address||"", e.dateHired||"", e.dateTerminated||"",
+    e.tin||"", e.position||"", e.address||"", fmtDateMDY(e.dateHired), fmtDateMDY(e.dateTerminated),
     e.monthlyRate ? +e.monthlyRate : "", e.dailyRate ? +e.dailyRate : "",
     e.status||"Active"
   ]);
