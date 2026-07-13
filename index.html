@@ -658,6 +658,10 @@
   .wtc-scroll thead th.wtc-ic{background:var(--accent-deep); color:#fff;}
   .wtc-scroll td.wtc-ic{background:#eff6ff;}
   .wtc-scroll td.wtc-warn{color:#e2445c; font-weight:600;}
+  /* mini pipeline chips on the saved-drafts list */
+  .pm-chip{display:inline-flex; align-items:center; font-size:.66rem; font-weight:700; padding:2px 7px; border-radius:4px; background:#00c875; color:#fff; margin-right:4px; letter-spacing:.03em;}
+  .pm-chip.next{background:#fff; color:var(--muted); border:1px dashed #c3c6d4;}
+  .pm-chip.full{background:#0f172a;}
   /* 1601-C draft return form lines */
   .draft-strong td{font-weight:700; background:#f8fafc;}
   .draft-sec td{font-weight:700; font-size:.78rem; letter-spacing:.04em; color:var(--muted); background:#fbfcfd;}
@@ -3692,9 +3696,16 @@ function renderWpDraft(R, c){
         <div class="card-title">Saved draft returns <span class="pill">${drafts.length}</span></div>
         <div class="table-scroll">
         <table>
-          <thead><tr><th>Period</th><th class="ta-c">Version</th><th class="ta-c">Based on</th><th>Saved</th><th>By</th><th class="ta-r">Amount due</th><th>Remarks</th></tr></thead>
+          <thead><tr><th>Period</th><th class="ta-c">Version</th><th class="ta-c">Based on</th><th>Saved</th><th>By</th><th class="ta-r">Amount due</th><th>Pipeline</th></tr></thead>
           <tbody>${drafts.map(d=>{
             const [dy, dm] = String(d.period).split("-");
+            // last 3 completed pipeline stages (+ what's next) for this period
+            const rk = `1601C|${periodKey("1601C", { y:+dy, m:+dm })}`;
+            const rec = (db.records[rk]||{})[c.id] || { stage:0, dates:{} };
+            const done = STEPS.slice(Math.max(0, rec.stage - 3), rec.stage);
+            const next = STEPS[rec.stage];
+            const pipeMini = done.map(s=>`<span class="pm-chip" title="${escapeHtml(s.label + (rec.dates[s.key] ? " · " + rec.dates[s.key] : ""))}">${s.short} ✓</span>`).join("")
+              + (next ? `<span class="pm-chip next" title="Next: ${escapeHtml(next.label)}">${next.short} next</span>` : `<span class="pm-chip full">Complete</span>`);
             return `
             <tr class="crow" onclick="openDraftPreview('${d.id}')">
               <td><div class="cname">${MONTHS[+dm-1]} ${dy}</div></td>
@@ -3703,7 +3714,7 @@ function renderWpDraft(R, c){
               <td class="due">${fmtDateMDY(String(d.savedAt).slice(0,10))}</td>
               <td class="due">${escapeHtml(d.savedBy||"—")}</td>
               <td class="due ta-r">${wtcFmt((d.lines&&d.lines.l25)||0)}</td>
-              <td style="max-width:260px; white-space:normal;">${escapeHtml(d.remarks||"—")}</td>
+              <td style="white-space:nowrap;">${pipeMini}${d.remarks ? `<div class="cmeta" style="max-width:260px; white-space:normal;">${escapeHtml(d.remarks)}</div>` : ""}</td>
             </tr>`;
           }).join("")}</tbody>
         </table>
