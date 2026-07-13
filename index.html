@@ -2066,7 +2066,10 @@ function renderWpEmployees(R, c){
     </div>
     <div class="toolbar">
       <div style="flex:1;"></div>
+      <button class="btn ghost" onclick="downloadEmpTemplate()">⬇ Download template</button>
+      <button class="btn ghost" onclick="importEmployees()">⬆ Import from Excel</button>
       <button class="btn" id="btnAddEmp" onclick="openEmp(null)">+ Add employee</button>
+      <input type="file" id="empImportFile" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleEmpImport(this)">
     </div>
     <div class="card">
       ${emps.length ? `
@@ -2129,6 +2132,76 @@ $("btnDeleteEmp").onclick = ()=>{
   if(!c || !editingEmpId) return;
   c.employees = (c.employees||[]).filter(x=>x.id!==editingEmpId);
   save(); closeOverlays(); render(); toast("Employee removed");
+};
+
+/* ---- Employee import (Excel) + downloadable template ---- */
+let sheetJsPromise = null;
+function loadSheetJS(){
+  if(window.XLSX) return Promise.resolve();
+  if(!sheetJsPromise){
+    sheetJsPromise = new Promise((res, rej)=>{
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.onload = res;
+      s.onerror = ()=>{ sheetJsPromise = null; rej(new Error("SheetJS failed to load")); };
+      document.head.appendChild(s);
+    });
+  }
+  return sheetJsPromise;
+}
+window.downloadEmpTemplate = async function(){
+  try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["LAST NAME","FIRST NAME","MIDDLE NAME","TIN","POSITION","STATUS"],
+    ["DELA CRUZ","JUAN","PROTACIO","123-456-789-000","ACCOUNTING STAFF","Active"],
+    ["SANTOS","MARIA","LOPEZ","987-654-321-000","HR SUPERVISOR","Separated"]
+  ]);
+  ws["!cols"] = [{wch:18},{wch:16},{wch:16},{wch:18},{wch:24},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Employees");
+  XLSX.writeFile(wb, "MSMA_Employee_Masterlist_Template.xlsx");
+};
+window.importEmployees = function(){ $("empImportFile").click(); };
+window.handleEmpImport = async function(input){
+  const file = input.files && input.files[0];
+  input.value = "";                                  // allow re-picking the same file
+  if(!file) return;
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
+  let rows;
+  try{
+    const wb = XLSX.read(await file.arrayBuffer());
+    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:"" });
+  }catch(e){ toast("Could not read that file — is it a valid Excel/CSV?"); return; }
+  const norm = s => String(s||"").toLowerCase().replace(/[^a-z]/g,"");
+  const hIdx = rows.findIndex(r => r.some(x=>norm(x).includes("lastname")) && r.some(x=>norm(x).includes("firstname")));
+  if(hIdx === -1){ toast("Header row not found — please use the downloadable template"); return; }
+  const header = rows[hIdx].map(norm);
+  const col = key => header.findIndex(h => h.includes(key));
+  const iL = col("lastname"), iF = col("firstname"), iM = col("middlename"),
+        iT = col("tin"), iP = col("position"), iS = col("status");
+  if(!c.employees) c.employees = [];
+  let added = 0, skipped = 0;
+  rows.slice(hIdx + 1).forEach(r=>{
+    const last = String(r[iL]||"").trim(), first = String(r[iF]||"").trim();
+    if(!last && !first) return;                      // blank row
+    if(!last || !first){ skipped++; return; }
+    const middle = iM > -1 ? String(r[iM]||"").trim() : "";
+    c.employees.push({
+      id: "e" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      name: `${last.toUpperCase()}, ${first.toUpperCase()}${middle ? " " + middle.toUpperCase() : ""}`,
+      lastName: last, firstName: first, middleName: middle,
+      tin: iT > -1 ? String(r[iT]||"").trim() : "",
+      position: iP > -1 ? String(r[iP]||"").trim() : "",
+      status: iS > -1 && /separat/i.test(String(r[iS]||"")) ? "Separated" : "Active"
+    });
+    added++;
+  });
+  if(added){ save(); render(); }
+  toast(added
+    ? `Imported ${added} employee${added===1?"":"s"}${skipped ? ` · ${skipped} row${skipped===1?"":"s"} skipped (missing name)` : ""}`
+    : "No employees found in the file");
 };
 
 /* -------------------- Masterlist -------------------- */
