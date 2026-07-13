@@ -1298,10 +1298,18 @@
   <div class="a4-sheet">
     <button class="xclose a4-close" data-close="draftA4Overlay">✕</button>
     <div id="draftA4Body"></div>
-    <div class="a4-actions">
-      <button class="btn ghost" onclick="draftReturnPdf()" title="Firm letterhead working paper with Prepared by / Reviewed by — for internal files">⬇ Internal copy (working paper)</button>
-      <button class="btn ghost" onclick="birFormPdf()" title="The actual return on the official BIR Form 1601-C — for sending to the client">⬇ Client copy (BIR Form 1601-C)</button>
+    <div id="draftPdfWrap" style="display:none;">
+      <iframe id="draftPdfFrame" style="width:100%; height:72vh; border:1px solid var(--line); border-radius:6px; background:#525659;"></iframe>
+    </div>
+    <div class="a4-actions" id="draftMainActions">
+      <button class="btn ghost" onclick="previewDraftPdf('internal')" title="Firm letterhead working paper with Prepared by / Reviewed by — for internal files">👁 Internal copy (working paper)</button>
+      <button class="btn ghost" onclick="previewDraftPdf('client')" title="The actual return on the official BIR Form 1601-C — for sending to the client">👁 Client copy (BIR Form 1601-C)</button>
       <button class="btn" id="draftSaveBtn" onclick="saveDraftForApproval()">Save draft return for approval</button>
+    </div>
+    <div class="a4-actions" id="draftPreviewActions" style="display:none;">
+      <div id="draftPreviewLabel" style="flex:1; font-size:.82rem; color:var(--muted); align-self:center;"></div>
+      <button class="btn ghost" onclick="closeDraftPdfPreview()">← Back to draft</button>
+      <button class="btn" onclick="downloadPreviewedPdf()">⬇ Download this PDF</button>
     </div>
   </div>
 </div>
@@ -3399,6 +3407,7 @@ window.openDraftPreview = function(savedId){
     </div>
     <div class="a4-foot">System-generated draft for internal review and approval — not for filing · Mora, Sanchez, Meñoza and Associates</div>`;
   $("draftSaveBtn").style.display = saved ? "none" : "";
+  closeDraftPdfPreview();                              // always open on the draft view, not a stale PDF preview
   $("draftA4Overlay").classList.add("open");
 };
 window.saveDraftForApproval = function(){
@@ -3434,9 +3443,9 @@ window.confirmDraftReason = function(){
   if(!r){ toast("A reason is required for an additional draft this month"); $("draftReason").focus(); return; }
   commitDraft(r);
 };
-window.draftReturnPdf = async function(){
-  if(!draftCur) return;
-  try{ await loadJsPDF(); }catch(e){ toast("Couldn't load the PDF engine — check your internet connection"); return; }
+/* firm-letterhead internal working paper; returns the jsPDF doc (preview/download handled by previewDraftPdf) */
+async function buildInternalPdf(){
+  await loadJsPDF();
   const doc = new window.jspdf.jsPDF("p","mm","a4");
   const c = draftCur.client, data = draftCur.data, saved = draftCur.saved;
   const [py, pm] = data.period.split("-");
@@ -3493,8 +3502,8 @@ window.draftReturnPdf = async function(){
   doc.text("Reviewed by · Senior Associate In-charge / Team Leader", 158, y + 4.5, {align:"center"});
   doc.setFontSize(7);
   doc.text("System-generated draft for internal review and approval — not for filing · Mora, Sanchez, Meñoza and Associates", 105, 288, {align:"center"});
-  doc.save(`${c.name.replace(/[^\w ]+/g,"").trim().replace(/ +/g,"_")}_1601C_Draft_${data.period}${saved ? "_v"+saved.version : ""}.pdf`);
-};
+  return doc;
+}
 /* ---- Official BIR Form 1601-C (Jan 2018): overlay the draft onto the real form ---- */
 let pdfLibPromise = null;
 function loadPdfLib(){
@@ -3584,17 +3593,50 @@ async function buildBirFormPdf(){
   }
   return doc.save();
 }
-window.birFormPdf = async function(){
-  if(!draftCur) return;
-  let bytes;
-  try{ bytes = await buildBirFormPdf(); }
-  catch(e){ toast("Couldn't build the BIR form PDF — check your internet connection"); return; }
+/* ---- PDF preview inside the A4 popup: what you see is exactly what downloads ---- */
+function draftPdfName(kind){
   const c = draftCur.client, data = draftCur.data, saved = draftCur.saved;
+  const base = c.name.replace(/[^\w ]+/g,"").trim().replace(/ +/g,"_");
+  const tag = kind === "client" ? "BIR_1601C" : "1601C_Draft";
+  return `${base}_${tag}_${data.period}${saved ? "_v"+saved.version : ""}.pdf`;
+}
+window.previewDraftPdf = async function(kind){
+  if(!draftCur) return;
+  let blob;
+  try{
+    if(kind === "client"){
+      const bytes = await buildBirFormPdf();
+      blob = new Blob([bytes], { type: "application/pdf" });
+    } else {
+      const doc = await buildInternalPdf();
+      blob = doc.output("blob");
+    }
+  }catch(e){ toast("Couldn't build the preview — check your internet connection"); return; }
+  if(draftCur.previewUrl) URL.revokeObjectURL(draftCur.previewUrl);
+  draftCur.previewUrl = URL.createObjectURL(blob);
+  draftCur.previewName = draftPdfName(kind);
+  $("draftPreviewLabel").textContent = kind === "client"
+    ? "Client copy — the actual return on the official BIR Form 1601-C"
+    : "Internal copy — firm working paper with Prepared by / Reviewed by";
+  $("draftPdfFrame").src = draftCur.previewUrl + "#toolbar=0&navpanes=0";
+  $("draftA4Body").style.display = "none";
+  $("draftPdfWrap").style.display = "";
+  $("draftMainActions").style.display = "none";
+  $("draftPreviewActions").style.display = "";
+};
+window.closeDraftPdfPreview = function(){
+  $("draftPdfFrame").src = "about:blank";
+  $("draftA4Body").style.display = "";
+  $("draftPdfWrap").style.display = "none";
+  $("draftMainActions").style.display = "";
+  $("draftPreviewActions").style.display = "none";
+};
+window.downloadPreviewedPdf = function(){
+  if(!draftCur || !draftCur.previewUrl) return;
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  a.download = `${c.name.replace(/[^\w ]+/g,"").trim().replace(/ +/g,"_")}_BIR_1601C_${data.period}${saved ? "_v"+saved.version : ""}.pdf`;
+  a.href = draftCur.previewUrl;
+  a.download = draftCur.previewName || "1601C_draft.pdf";
   a.click();
-  setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
 };
 window.setDraftField = function(key, el){
   const c = db.clients.find(x=>x.id===wpClient);
