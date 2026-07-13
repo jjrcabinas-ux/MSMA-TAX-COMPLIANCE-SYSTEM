@@ -1860,7 +1860,8 @@ window.openWpSection = function(key){
   wpSection = key;
   if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpWtcOn = false; wpWtcViewRec = null; wpWtcEditReason = null; wpWtcEditPeriod = null; wpWtcEditRecId = null; }
   render();
-  if(key === "computation") openPayrollAsk();
+  /* the payroll prompt only auto-opens from the pipeline's Data Received hook (goToWtcComputation);
+     plain navigation lands on the recorded-computations list */
 };
 window.backToWpSections = function(){ wpSection = null; render(); };
 /* pipeline hook: Data Received on 1601-C jumps straight into the computation */
