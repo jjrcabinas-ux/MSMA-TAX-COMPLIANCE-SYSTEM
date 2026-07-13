@@ -1564,8 +1564,9 @@ let wpClient = null;             // client id selected inside that working paper
 let wpSearchQ = "";              // company search inside a working paper
 let wpSection = null;            // module open inside a company's working paper
 let editingEmpId = null;         // employee being edited in the masterlist modal
-let wpCompPhase = "ask";         // WTC computation: ask | nodata | upload | results | compute
+let wpCompPhase = "ask";         // WTC computation: ask | nodata | upload | results | manual-select | compute
 let wpVerif = null;              // last payroll-verification result
+let wpManualSel = null;          // Set of employee ids included in a manual computation
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -1774,7 +1775,7 @@ window.openWpClient = function(cid){ wpClient = cid; wpSection = null; render();
 window.backToWpCompanies = function(){ wpClient = null; wpSection = null; render(); };
 window.openWpSection = function(key){
   wpSection = key;
-  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; }
+  if(key === "computation"){ wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; }
   render();
   if(key === "computation") openPayrollAsk();
 };
@@ -1782,7 +1783,7 @@ window.backToWpSections = function(){ wpSection = null; render(); };
 /* pipeline hook: Data Received on 1601-C jumps straight into the computation */
 window.goToWtcComputation = function(cid){
   wpReturn = "1601C"; wpClient = cid; wpSection = "computation";
-  wpCompPhase = "ask"; wpVerif = null; wpSearchQ = "";
+  wpCompPhase = "ask"; wpVerif = null; wpManualSel = null; wpSearchQ = "";
   view = "wpdetail";
   $("taxParent").classList.remove("open");
   $("taxSubmenu").classList.remove("open");
@@ -1801,6 +1802,23 @@ window.payrollAnswer = function(yes){
 window.payrollManual = function(){
   closeOverlays();
   wpVerif = null;                 // manual mode: no verified payroll data
+  const c = db.clients.find(x=>x.id===wpClient);
+  wpManualSel = new Set(((c && c.employees) || []).map(e=>e.id));   // auto-check everyone
+  wpCompPhase = "manual-select";
+  render();
+};
+window.toggleManualEmp = function(id){
+  if(!wpManualSel) wpManualSel = new Set();
+  if(wpManualSel.has(id)) wpManualSel.delete(id); else wpManualSel.add(id);
+  render();
+};
+window.toggleManualAll = function(checked){
+  const c = db.clients.find(x=>x.id===wpClient);
+  wpManualSel = checked ? new Set(((c && c.employees) || []).map(e=>e.id)) : new Set();
+  render();
+};
+window.proceedManualCompute = function(){
+  if(!wpManualSel || !wpManualSel.size){ toast("Select at least one employee"); return; }
   wpCompPhase = "compute";
   render();
 };
@@ -2561,15 +2579,58 @@ function renderWpComputation(R, c){
       </div>`;
   }
 
+  if(wpCompPhase === "manual-select"){
+    const emps = c.employees || [];
+    if(!emps.length) return head + `
+      <div class="card"><div class="attn-empty" style="min-height:190px;">
+        <div>No employees in the masterlist for <b>${escapeHtml(c.name)}</b> yet.<br>Build the Employee Masterlist first, then come back.</div>
+        <button class="btn" style="margin-top:14px;" onclick="openWpSection('employees')">Open Employee Masterlist</button>
+      </div></div>`;
+    const sel = wpManualSel || new Set();
+    const allChecked = emps.length > 0 && emps.every(e=>sel.has(e.id));
+    const rows = emps.map((e,i)=>{
+      const fullName = [e.firstName, e.middleName, e.lastName].filter(Boolean).join(" ").toUpperCase() || (e.name||"—");
+      return `
+      <tr class="crow" onclick="toggleManualEmp('${e.id}')">
+        <td class="ta-c"><input type="checkbox" ${sel.has(e.id)?"checked":""} onclick="event.stopPropagation();" onchange="toggleManualEmp('${e.id}')"></td>
+        <td class="cmeta">${i+1}</td>
+        <td><div class="cname">${escapeHtml(fullName)}</div></td>
+        <td class="due ta-c">${escapeHtml(e.tin||"—")}</td>
+        <td class="due ta-r">${fmtMoney(e.dailyRate)}</td>
+        <td class="due ta-r">${fmtMoney(e.monthlyRate)}</td>
+        <td><span class="flagchip ${e.status==="Separated"?"grey":"green"}">${escapeHtml(e.status||"Active")}</span></td>
+      </tr>`;
+    }).join("");
+    return head + `
+      <div class="card">
+        <div class="card-title">Employees included in this computation <span class="pill">${sel.size} of ${emps.length}</span></div>
+        <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th class="ta-c" style="width:44px;"><input type="checkbox" ${allChecked?"checked":""} onchange="toggleManualAll(this.checked)" title="Select all / none"></th>
+            <th style="width:44px;">#</th><th>Full name</th><th class="ta-c">TIN</th>
+            <th class="ta-r">Daily rate</th><th class="ta-r">Monthly rate</th><th>Status</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        </div>
+      </div>
+      <div class="toolbar" style="margin-top:4px;">
+        <div style="flex:1;"></div>
+        <button class="btn ghost" onclick="openPayrollAsk()">← Back to the payroll prompt</button>
+        <button class="btn" onclick="proceedManualCompute()">Proceed with ${sel.size} employee${sel.size===1?"":"s"} →</button>
+      </div>`;
+  }
+
   if(wpCompPhase === "compute") return head + `
     <div class="card"><div class="attn-empty" style="min-height:200px;">
       <div>${wpVerif
         ? `Payroll data for <b>${escapeHtml(c.name)}</b> is verified and locked in ✓`
-        : `<b>Manual mode</b> — payroll verification was skipped for <b>${escapeHtml(c.name)}</b>.`}<br>
+        : `<b>Manual mode</b> — ${wpManualSel ? `<b>${wpManualSel.size}</b> employee${wpManualSel.size===1?"":"s"} selected from the masterlist` : `payroll verification was skipped`} for <b>${escapeHtml(c.name)}</b>.`}<br>
       The withholding computation engine is the next build step — tell us the computation sheet you use and we'll model it.</div>
       ${wpVerif
         ? `<button class="btn ghost" style="margin-top:14px;" onclick="wpCompPhase='results'; render();">← Back to verification results</button>`
-        : `<button class="btn ghost" style="margin-top:14px;" onclick="openPayrollAsk()">← Back to the payroll prompt</button>`}
+        : `<button class="btn ghost" style="margin-top:14px;" onclick="wpCompPhase='manual-select'; render();">← Back to employee selection</button>`}
     </div></div>`;
 
   /* default: waiting for the popup answer */
