@@ -3563,8 +3563,8 @@ async function buildBirFormPdf(){
     ctr(586.6, y + 1, cents[1], 8, font);
   };
   /* Part I — background information (box centers measured from the form image) */
-  ctr(24.9, 812, pm[0]); ctr(39.2, 812, pm[1]);        // 1 · For the Month: MM cells…
-  [53.6, 67.9, 82.1, 96.4].forEach((cx,i)=> ctr(cx, 812, py[i]));   // …YYYY cells
+  ctr(53.5, 812, pm[0]); ctr(67.7, 812, pm[1]);        // 1 · For the Month: MM cells (46.4–74.8)…
+  [82, 96.2, 110.5, 124.9].forEach((cx,i)=> ctr(cx, 812, py[i]));   // …YYYY cells (74.8–132)
   ctr(238, 812, "X");                                  // 2 · Amended Return? No (box 231.4–244.5)
   ctr(311.1, 812, "X");                                // 3 · Any Taxes Withheld? Yes (box 304.5–317.7)
   const dg = String(c.tin||"").replace(/\D/g,"");
@@ -3580,6 +3580,8 @@ async function buildBirFormPdf(){
       if(cells[gi][i] != null) ctr(cells[gi][i], 779, ch);
     }));
   }
+  const rdo = String(c.rdo||"").replace(/[^\w]/g,"").slice(0,3);
+  rdo.split("").forEach((ch, i)=> ctr([556.3, 571, 586.2][i], 779, ch));   // 7 · RDO Code cells (549–594)
   cellText((c.name||"").toUpperCase(), 756, 17.3, 40, 8, bold);   // 8 · Registered name, one letter per cell
   const addr = String(c.address||"").toUpperCase();
   if(addr){                                            // 9 · Registered address across its two cell rows
