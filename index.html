@@ -488,10 +488,10 @@
   .ct-link.ct-single{display:inline-block; width:auto; padding:3px 6px; margin-left:-6px;}
   .tax-dd-pop.ct-pop{display:block; min-width:210px; padding:6px;}
   .contact-modal{max-width:400px;}
-  .ct-view .ct-line{display:flex; justify-content:space-between; gap:14px; padding:10px 2px; border-bottom:1px solid var(--line);}
+  .ct-view .ct-line{display:grid; grid-template-columns:130px 1fr; gap:14px; padding:10px 2px; border-bottom:1px solid var(--line); align-items:baseline;}
   .ct-view .ct-line:last-child{border-bottom:none;}
   .ct-view .ct-line span{color:var(--muted); font-size:.82rem;}
-  .ct-view .ct-line b{font-weight:400; text-align:right; word-break:break-word;}
+  .ct-view .ct-line b{font-weight:400; text-align:left; word-break:break-word;}
   .ct-view .ct-line a{color:var(--accent-deep); text-decoration:none;}
   .ct-view .ct-line a:hover{text-decoration:underline;}
   /* expandable client detail row */
@@ -638,7 +638,7 @@
   }
   .wp-card .rc-meta{margin-bottom:0;}
   .wp-card .wp-open{margin-left:auto; font-size:.8rem; color:var(--accent-deep);}
-  .wp-back{margin-left:auto; padding:7px 14px; font-size:.82rem;}
+  .wp-back{margin-left:2px; padding:7px 14px; font-size:.82rem;}
   .table-scroll{overflow-x:auto;}
   .table-scroll td{white-space:nowrap;}
   /* dashboard fills remaining height so it never looks half-loaded (item 11) */
