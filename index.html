@@ -1958,9 +1958,8 @@ async function tryLogin(){
     else { return fail("Can't reach the server, and this device hasn't signed in before. Connect to the internet for the first sign-in."); }
   }
 
-  /* email verification (legacy @msma.app cluster accounts are exempt during migration) */
-  const legacy = email.endsWith("@msma.app");
-  if(!offline && !legacy && !window.fbAuth.isVerified()){
+  /* email verification */
+  if(!offline && !window.fbAuth.isVerified()){
     await window.fbAuth.reloadUser().catch(()=>{});
     if(!window.fbAuth.isVerified()){
       return fail('Please verify your email first — check your inbox. <a href="#" onclick="event.preventDefault(); resendVerify();" style="color:#93c5fd;">Resend the verification email</a>', true);
@@ -1971,8 +1970,6 @@ async function tryLogin(){
   let clusters;
   if(email === ADMIN_EMAIL){
     clusters = CLUSTERS.slice();
-  } else if(legacy){
-    clusters = [email.split("@")[0].toUpperCase()];
   } else if(offline){
     try{ clusters = JSON.parse(store.get(memCacheKey(email)) || "null"); }catch(e){ clusters = null; }
     if(!clusters || !clusters.length) return fail("This device doesn't know your cluster membership yet — connect to the internet to sign in.");
@@ -4877,12 +4874,7 @@ tickClock(); setInterval(tickClock, 1000);
   const auth = getAuth(app);
 
   // Individual accounts: each user signs in with their own email.
-  // (Legacy shared cluster accounts still work by typing e.g. ads@msma.app.)
-  const clusterEmail = c => c.toLowerCase() + "@msma.app";
   window.fbAuth = {
-    signIn(cluster, password){                          // legacy shared-account path
-      return signInWithEmailAndPassword(auth, clusterEmail(cluster), password);
-    },
     signInEmail(email, password){
       return signInWithEmailAndPassword(auth, email, password);
     },
