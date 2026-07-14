@@ -169,6 +169,9 @@
   .login-btn.loading .spinner{display:inline-block;}
   @keyframes spin{ to{transform:rotate(360deg);} }
   .login-foot{margin-top:26px; text-align:center; font-size:11px; font-weight:400; letter-spacing:.04em; color:rgba(255,255,255,.58);}
+  .login-links{margin-top:14px; text-align:center; font-size:.82rem; color:rgba(255,255,255,.45); display:flex; gap:10px; justify-content:center;}
+  .login-links a{color:#93c5fd; text-decoration:none;}
+  .login-links a:hover{text-decoration:underline;}
   @media (max-width:768px){
     .login-visual{display:none;}
     .login-panel{flex:1 1 100%; min-width:0; padding:28px 18px;}
@@ -865,17 +868,28 @@
         <button class="cluster-opt" data-cluster="VCM">VCM<small>Cluster</small></button>
       </div>
       <div class="login-field">
-        <label for="loginPw">Cluster password</label>
+        <label for="loginEmail">Email</label>
         <div class="pw-wrap">
-          <input type="password" id="loginPw" placeholder="Enter cluster password" autocomplete="off" disabled>
+          <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="username" disabled>
+        </div>
+      </div>
+      <div class="login-field">
+        <label for="loginPw" id="loginPwLabel">Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="loginPw" placeholder="Enter your password" autocomplete="off" disabled>
           <button class="eye" id="pwEye" type="button" aria-label="Show password" disabled>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
       </div>
       <div class="login-err" id="loginErr"></div>
-      <button class="login-btn" id="btnLogin" disabled><span class="spinner" aria-hidden="true"></span><span class="btn-label">Sign in</span></button>
-      <div class="login-foot">Internal use only · msma.work</div>
+      <button class="login-btn" id="btnLogin" disabled><span class="spinner" aria-hidden="true"></span><span class="btn-label" id="btnLoginLabel">Sign in</span></button>
+      <div class="login-links">
+        <a href="#" id="lnkMode" onclick="event.preventDefault(); toggleLoginMode();">Create an account</a>
+        <span>·</span>
+        <a href="#" id="lnkForgot" onclick="event.preventDefault(); forgotPassword();">Forgot password?</a>
+      </div>
+      <div class="login-foot">Internal use only · msma.work · access is granted by your administrator</div>
     </div>
   </div>
 </div>
@@ -929,6 +943,10 @@
     <button class="nav-item" data-view="reports">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       <span class="label">Reports</span>
+    </button>
+    <button class="nav-item" data-view="team" id="navTeam" style="display:none;">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span class="label">Team</span>
     </button>
 
     <div class="nav-bottom">
@@ -1502,7 +1520,7 @@ function restoreNav(){
     view = "wpdetail";
     return;
   }
-  if(["dashboard","masterlist","workingpaper","reports"].includes(s.view) || TAX_PAGES[s.view]) view = s.view;
+  if(["dashboard","masterlist","workingpaper","reports","team"].includes(s.view) || TAX_PAGES[s.view]) view = s.view;
 }
 function loadDb(){
   try { db = JSON.parse(store.get(dbKey())) || null; } catch(e){ db = null; }
@@ -1826,19 +1844,52 @@ function fmtMoney(v){
 /* ============================================================
    LOGIN flow
 ============================================================ */
+const ADMIN_EMAIL = "jjrc.msma@gmail.com";
+const memCacheKey = e => `msma_mem_v1_${String(e).toLowerCase()}`;
 let selCluster = null;
+let loginMode = "signin";
 document.querySelectorAll(".cluster-opt").forEach(b=>{
   b.onclick = ()=>{
     document.querySelectorAll(".cluster-opt").forEach(x=>x.classList.remove("sel"));
     b.classList.add("sel");
     selCluster = b.dataset.cluster;
     $("loginErr").classList.remove("show");
+    $("loginEmail").disabled = false;
     $("loginPw").disabled = false;
     $("pwEye").disabled = false;
     $("btnLogin").disabled = false;
-    $("loginPw").focus();
+    ($("loginEmail").value ? $("loginPw") : $("loginEmail")).focus();
   };
 });
+window.toggleLoginMode = function(){
+  loginMode = loginMode === "signin" ? "signup" : "signin";
+  $("btnLoginLabel").textContent = loginMode === "signin" ? "Sign in" : "Create account";
+  $("lnkMode").textContent = loginMode === "signin" ? "Create an account" : "Have an account? Sign in";
+  $("loginPw").placeholder = loginMode === "signin" ? "Enter your password" : "Choose a password (8+ characters)";
+  $("loginErr").classList.remove("show");
+};
+window.forgotPassword = async function(){
+  const err = $("loginErr");
+  const email = $("loginEmail").value.trim().toLowerCase();
+  const show = msg => { err.textContent = msg; void err.offsetWidth; err.classList.add("show"); };
+  if(!email){ show("Type your email above first, then click Forgot password."); return; }
+  try{
+    await window.fbAuth.resetPassword(email);
+    show("Password reset email sent to " + email + " — check your inbox.");
+  }catch(e){
+    show("Couldn't send the reset email — check the address and your connection.");
+  }
+};
+window.resendVerify = async function(){
+  const err = $("loginErr");
+  try{
+    await window.fbAuth.resendVerification();
+    err.textContent = "Verification email re-sent — check your inbox (and spam folder).";
+  }catch(e){
+    err.textContent = "Couldn't resend — sign in again first, then click resend.";
+  }
+  void err.offsetWidth; err.classList.add("show");
+};
 $("pwEye").onclick = ()=>{
   const i = $("loginPw");
   const reveal = i.type === "password";   // this click reveals the password
@@ -1849,48 +1900,105 @@ $("pwEye").onclick = ()=>{
 async function tryLogin(){
   const err = $("loginErr");
   err.classList.remove("show");
-  if(!selCluster){
+  const email = $("loginEmail").value.trim().toLowerCase();
+  const pw = $("loginPw").value;
+  if(loginMode === "signin" && !selCluster){
     err.textContent = "Please select your cluster first.";
     void err.offsetWidth; err.classList.add("show"); return;
   }
-  const pw = $("loginPw").value;
-  if(!pw){
-    err.textContent = "Enter the " + selCluster + " Cluster password.";
-    void err.offsetWidth; err.classList.add("show");
-    $("loginPw").focus(); return;
-  }
-  // authenticating: show loading state (spinner + disabled)
+  if(!email){ err.textContent = "Enter your email address."; void err.offsetWidth; err.classList.add("show"); $("loginEmail").focus(); return; }
+  if(!pw){ err.textContent = loginMode === "signup" ? "Choose a password (at least 8 characters)." : "Enter your password."; void err.offsetWidth; err.classList.add("show"); $("loginPw").focus(); return; }
   const btn = $("btnLogin");
-  btn.classList.add("loading"); btn.disabled = true; $("loginPw").disabled = true; $("pwEye").disabled = true;
-  const fail = msg => {
-    btn.classList.remove("loading"); btn.disabled = false;
-    $("loginPw").disabled = false; $("pwEye").disabled = false;
-    err.textContent = msg;
-    void err.offsetWidth; err.classList.add("show");
-    $("loginPw").select();
+  const setBusy = b => {
+    btn.classList.toggle("loading", b); btn.disabled = b;
+    $("loginEmail").disabled = b; $("loginPw").disabled = b; $("pwEye").disabled = b;
   };
-  // Firebase Auth is the gate — the password is verified by the server, not this page.
-  let ok = false;
+  setBusy(true);
+  const fail = (msg, html) => {
+    setBusy(false);
+    if(html) err.innerHTML = msg; else err.textContent = msg;
+    void err.offsetWidth; err.classList.add("show");
+  };
+
+  /* ---- create account ---- */
+  if(loginMode === "signup"){
+    if(pw.length < 8) return fail("Use at least 8 characters for your password.");
+    try{
+      if(!window.fbAuth) throw { code: "auth/network-request-failed" };
+      await window.fbAuth.signUp(email, pw);
+      await window.fbAuth.signOutUser().catch(()=>{});
+      toggleLoginMode();                               // back to sign-in
+      return fail("Account created — a verification email was sent to " + email + ". Click the link in it, then sign in here. Data access begins once your administrator adds you to a cluster.");
+    }catch(e){
+      const code = (e && e.code) || "";
+      if(code === "auth/email-already-in-use") return fail("That email already has an account — sign in instead.");
+      if(code === "auth/invalid-email") return fail("That doesn't look like a valid email address.");
+      if(code === "auth/weak-password") return fail("Password too weak — use at least 8 characters.");
+      return fail("Couldn't create the account — check your connection and try again.");
+    }
+  }
+
+  /* ---- sign in: Firebase Auth is the gate; offline uses this device's verifier ---- */
+  let offline = false;
   try{
     if(!window.fbAuth) throw { code: "auth/network-request-failed" };
-    await window.fbAuth.signIn(selCluster, pw);
-    ok = true;
-    saveOfflineVerifier(selCluster, pw);               // lets THIS device sign in offline later
+    await window.fbAuth.signInEmail(email, pw);
   }catch(e){
     const code = (e && e.code) || "";
     if(["auth/wrong-password","auth/invalid-credential","auth/invalid-login-credentials","auth/user-not-found"].includes(code)){
-      return fail("Incorrect password for the " + selCluster + " Cluster.");
+      return fail("Incorrect email or password.");
     }
     if(code === "auth/too-many-requests"){
       return fail("Too many attempts — sign-in is temporarily locked. Try again in a few minutes.");
     }
-    // network / server unreachable: fall back to this device's offline verifier
-    const off = await checkOfflineVerifier(selCluster, pw);
-    if(off === true){ ok = true; }
-    else if(off === false){ return fail("Incorrect password for the " + selCluster + " Cluster."); }
+    if(code === "auth/invalid-email") return fail("That doesn't look like a valid email address.");
+    const off = await checkOfflineVerifier(email, pw);
+    if(off === true){ offline = true; }
+    else if(off === false){ return fail("Incorrect email or password."); }
     else { return fail("Can't reach the server, and this device hasn't signed in before. Connect to the internet for the first sign-in."); }
   }
-  if(!ok) return;
+
+  /* email verification (legacy @msma.app cluster accounts are exempt during migration) */
+  const legacy = email.endsWith("@msma.app");
+  if(!offline && !legacy && !window.fbAuth.isVerified()){
+    await window.fbAuth.reloadUser().catch(()=>{});
+    if(!window.fbAuth.isVerified()){
+      return fail('Please verify your email first — check your inbox. <a href="#" onclick="event.preventDefault(); resendVerify();" style="color:#93c5fd;">Resend the verification email</a>', true);
+    }
+  }
+
+  /* membership → which clusters this account may enter */
+  let clusters;
+  if(email === ADMIN_EMAIL){
+    clusters = CLUSTERS.slice();
+  } else if(legacy){
+    clusters = [email.split("@")[0].toUpperCase()];
+  } else if(offline){
+    try{ clusters = JSON.parse(store.get(memCacheKey(email)) || "null"); }catch(e){ clusters = null; }
+    if(!clusters || !clusters.length) return fail("This device doesn't know your cluster membership yet — connect to the internet to sign in.");
+  } else {
+    let m = null, lookupFailed = false;
+    try{ m = await window.fbAuth.getMember(email); }
+    catch(e){ lookupFailed = true; console.warn("[auth] member lookup failed:", e.code || e.message); }
+    if(lookupFailed){
+      clusters = CLUSTERS.slice();                     // Firestore rules remain the real gate
+    } else if(m && m.clusters && m.clusters.length){
+      clusters = m.clusters;
+    } else {
+      await window.fbAuth.signOutUser().catch(()=>{});
+      return fail("Your account has no cluster access yet — ask your administrator (" + ADMIN_EMAIL + ") to add you.");
+    }
+  }
+  if(!clusters.includes(selCluster)){
+    setBusy(false);
+    return fail("Your account doesn't belong to the " + selCluster + " Cluster. Your access: " + clusters.join(", ") + ".");
+  }
+
+  if(!offline){
+    saveOfflineVerifier(email, pw);                    // lets THIS device sign in offline later
+    store.set(memCacheKey(email), JSON.stringify(clusters));
+  }
+  store.set("msma_last_email", email);
   session.set("msma_cluster", selCluster);
   if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches){
     setTimeout(()=> enterApp(selCluster), 400);   // skip the animation
@@ -1930,6 +2038,8 @@ function playEnterAnimation(cl, done){
 }
 $("btnLogin").onclick = tryLogin;
 $("loginPw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); });
+$("loginEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("loginPw").focus(); });
+$("loginEmail").value = store.get("msma_last_email") || "";
 
 function enterApp(cl){
   cluster = cl;
@@ -1959,6 +2069,7 @@ $("btnLogout").onclick = ()=>{
   selCluster = null;
   // reset the login form to its initial (locked) state
   const btn = $("btnLogin"); btn.classList.remove("loading"); btn.disabled = true;
+  $("loginEmail").disabled = true;
   $("loginPw").disabled = true; $("loginPw").value = ""; $("loginPw").type = "password";
   $("pwEye").disabled = true; $("pwEye").classList.remove("active"); $("pwEye").setAttribute("aria-label", "Show password");
   $("loginErr").classList.remove("show");
@@ -2014,10 +2125,84 @@ function render(){
   else if(view==="workingpaper") el.innerHTML = renderWorkingPaper();
   else if(view==="wpdetail") el.innerHTML = renderWpDetail();
   else if(view==="reports") el.innerHTML = renderPlaceholder("Reports", "Generate compliance and filing reports for the cluster.");
+  else if(view==="team") el.innerHTML = renderTeam();
   else el.innerHTML = renderTaxPage(view);
+  $("navTeam").style.display = isAdminUser() ? "" : "none";
   wirePageEvents();
   saveNav();
 }
+function isAdminUser(){
+  return !!(window.fbAuth && window.fbAuth.currentEmail() === ADMIN_EMAIL);
+}
+function whoAmI(){                                     // stamps records with the actual person
+  return (window.fbAuth && window.fbAuth.currentEmail()) || cluster;
+}
+/* -------------------- Team (admin only) -------------------- */
+function renderTeam(){
+  if(!isAdminUser()) return renderPlaceholder("Team", "Only the administrator can manage team access.");
+  setTimeout(loadTeamList, 0);
+  return `
+    <div class="page-head">
+      <h1>Team</h1>
+      <div class="sub">Who can sign in, and which cluster they belong to · administrator: ${escapeHtml(ADMIN_EMAIL)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Add a member</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:14px 16px;">
+        <input id="tmEmail" type="email" placeholder="member@email.com" style="flex:1; min-width:240px; padding:9px 12px; border:1px solid var(--line); border-radius:8px; font:inherit;">
+        <div class="tax-chips" id="tmClusters">
+          ${CLUSTERS.map(cl=>`<button type="button" class="tax-chip" data-cl="${cl}" onclick="this.classList.toggle('selected')">${cl}</button>`).join("")}
+        </div>
+        <button class="btn" onclick="teamAdd()">Add member</button>
+      </div>
+      <div class="wtc-note">The member signs up with this email (Create an account on the login page), verifies it, and can then sign in to the clusters you assign here.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Members</div>
+      <div id="teamBody"><div class="attn-empty" style="min-height:90px;"><div>Loading members…</div></div></div>
+    </div>`;
+}
+async function loadTeamList(){
+  const el = $("teamBody");
+  if(!el) return;
+  try{
+    const members = await window.fbAuth.listMembers();
+    members.sort((a,b)=> a.email.localeCompare(b.email));
+    el.innerHTML = members.length ? `
+      <table>
+        <thead><tr><th>Email</th><th>Clusters</th><th></th></tr></thead>
+        <tbody>${members.map(m=>`
+          <tr>
+            <td><div class="cname">${escapeHtml(m.email)}</div></td>
+            <td>${m.clusters.map(cl=>`<span class="taxtag">${escapeHtml(cl)}</span>`).join(" ")}</td>
+            <td class="ta-r"><button class="btn ghost" style="padding:4px 12px; font-size:.78rem;" onclick="teamRemove('${escapeHtml(m.email)}')">Remove</button></td>
+          </tr>`).join("")}</tbody>
+      </table>` : `<div class="attn-empty" style="min-height:90px;"><div>No members yet — add the first one above.</div></div>`;
+  }catch(e){
+    el.innerHTML = `<div class="attn-empty" style="min-height:90px;"><div>Couldn't load members (${escapeHtml(e.code||e.message||"error")}).<br>Make sure the updated Firestore rules are published and you're signed in as the administrator.</div></div>`;
+  }
+}
+window.teamAdd = async function(){
+  const email = $("tmEmail").value.trim().toLowerCase();
+  const clusters = [...document.querySelectorAll("#tmClusters .tax-chip.selected")].map(b=>b.dataset.cl);
+  if(!email || !email.includes("@")){ toast("Enter the member's email address"); return; }
+  if(!clusters.length){ toast("Pick at least one cluster"); return; }
+  try{
+    await window.fbAuth.setMember(email, clusters);
+    toast(`${email} added to ${clusters.join(", ")}`);
+    $("tmEmail").value = "";
+    document.querySelectorAll("#tmClusters .tax-chip.selected").forEach(b=>b.classList.remove("selected"));
+    loadTeamList();
+  }catch(e){ toast("Couldn't save the member — are the updated Firestore rules published?"); }
+};
+window.teamRemove = async function(email){
+  if(!confirm(`Remove ${email}'s access? They will no longer be able to open any cluster.`)) return;
+  try{
+    await window.fbAuth.removeMember(email);
+    toast(`${email} removed`);
+    loadTeamList();
+  }catch(e){ toast("Couldn't remove the member — are the updated Firestore rules published?"); }
+};
 function renderPlaceholder(title, sub){
   return `
     <div class="page-head">
@@ -2262,7 +2447,7 @@ window.confirmWtcSave = function(){
   const rec = {
     id: "w" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     period: p, version: existing.length + 1, freq: wpCompFreq,
-    savedAt: new Date().toISOString(), savedBy: cluster,
+    savedAt: new Date().toISOString(), savedBy: whoAmI(),
     remarks, rows
   };
   c.wtcRecords.push(rec);
@@ -3595,7 +3780,7 @@ function commitDraft(remarks){
   c.draftRecords.push({
     id: "d" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     period: draftCur.data.period, version: existing.length + 1, basedOn: draftCur.data.basedOn,
-    savedAt: new Date().toISOString(), savedBy: cluster, remarks,
+    savedAt: new Date().toISOString(), savedBy: whoAmI(), remarks,
     preparer: c.preparer||"", reviewer: c.reviewer||"", lines: draftCur.data.lines
   });
   // pipeline hook: a saved draft moves the client's 1601-C record for that month to "Return Drafted"
@@ -4670,9 +4855,10 @@ tickClock(); setInterval(tickClock, 1000);
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getFirestore, doc, onSnapshot, setDoc, serverTimestamp,
-           collection, query, orderBy, getDocs, deleteDoc }
+           collection, query, orderBy, getDocs, getDoc, deleteDoc }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+           sendEmailVerification, sendPasswordResetEmail, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
   const firebaseConfig = {
@@ -4690,14 +4876,45 @@ tickClock(); setInterval(tickClock, 1000);
   const fs  = getFirestore(app);
   const auth = getAuth(app);
 
-  // Per-cluster Firebase account (password == the cluster password the user types).
+  // Individual accounts: each user signs in with their own email.
+  // (Legacy shared cluster accounts still work by typing e.g. ads@msma.app.)
   const clusterEmail = c => c.toLowerCase() + "@msma.app";
   window.fbAuth = {
-    signIn(cluster, password){
+    signIn(cluster, password){                          // legacy shared-account path
       return signInWithEmailAndPassword(auth, clusterEmail(cluster), password);
     },
+    signInEmail(email, password){
+      return signInWithEmailAndPassword(auth, email, password);
+    },
+    async signUp(email, password){
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      try{ await sendEmailVerification(cred.user); }catch(e){}
+      return cred;
+    },
+    resendVerification(){
+      return auth.currentUser ? sendEmailVerification(auth.currentUser) : Promise.reject(new Error("not signed in"));
+    },
+    resetPassword(email){ return sendPasswordResetEmail(auth, email); },
+    isVerified(){ return !!(auth.currentUser && auth.currentUser.emailVerified); },
+    reloadUser(){ return auth.currentUser ? auth.currentUser.reload() : Promise.resolve(); },
     signOutUser(){ return signOut(auth); },
-    currentEmail(){ return auth.currentUser ? auth.currentUser.email : null; }
+    currentEmail(){ return auth.currentUser ? auth.currentUser.email : null; },
+    /* ---- team membership (members/{email} docs; writes are admin-only per rules) ---- */
+    async getMember(email){
+      const snap = await getDoc(doc(fs, "members", String(email).toLowerCase()));
+      return snap.exists() ? snap.data() : null;
+    },
+    setMember(email, clusters){
+      return setDoc(doc(fs, "members", String(email).toLowerCase()),
+        { clusters, updatedAt: serverTimestamp() });
+    },
+    removeMember(email){
+      return deleteDoc(doc(fs, "members", String(email).toLowerCase()));
+    },
+    async listMembers(){
+      const qs = await getDocs(collection(fs, "members"));
+      return qs.docs.map(d => ({ email: d.id, clusters: (d.data().clusters || []) }));
+    }
   };
   // Tell the main script whenever the signed-in state changes (also fires on
   // reload once Firebase restores a persisted session).
