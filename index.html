@@ -661,6 +661,8 @@
   .wtc-scroll thead th.wtc-ic{background:var(--accent-deep); color:#fff;}
   .wtc-scroll td.wtc-ic{background:#eff6ff;}
   .wtc-scroll td.wtc-warn{color:#e2445c; font-weight:600;}
+  /* DAT record editor section headers */
+  .dat-sec{font-weight:700; font-size:.74rem; letter-spacing:.05em; color:#fff; background:#0f172a; padding:6px 10px; border-radius:6px; margin:16px 0 10px;}
   /* company-summary popup: stat tiles double as filters */
   .comp-tile{cursor:pointer; transition:box-shadow .12s, transform .12s;}
   .comp-tile:hover{box-shadow:0 0 0 2px var(--accent-soft);}
@@ -1350,6 +1352,25 @@
       <div class="right">
         <button class="btn ghost" data-close="annPrevOverlay">Cancel</button>
         <button class="btn" onclick="saveAnnPrev()">Save &amp; annualize</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- DAT File: per-employee alphalist record (BIR 1604C Schedule 1) -->
+<div class="overlay" id="datRecOverlay" onclick="if(event.target===this) closeOverlays();">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(960px, 97vw); max-width:none;">
+    <header>
+      <h2 id="datRecTitle">Alphalist record — Schedule 1</h2>
+      <button class="xclose" data-close="datRecOverlay">✕</button>
+    </header>
+    <div class="body" style="display:block; max-height:72vh; overflow-y:auto;">
+      <div id="datRecBody"></div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="datRecOverlay">Cancel</button>
+        <button class="btn" onclick="saveDatRecord()">Save record</button>
       </div>
     </footer>
   </div>
@@ -4262,6 +4283,104 @@ window.downloadAnnualist = async function(fmt){
   XLSX.writeFile(wb, base + ".xlsx");
   toast("Alphalist Excel downloaded");
 };
+
+/* ---- DAT File: per-employee alphalist record (BIR 1604C Schedule 1) ---- */
+const DAT_HEADER = [
+  ["region","Region","text"],
+  ["nationality","Nationality","text"],
+  ["empStatus","Current Employment Status","select","Regular|Casual|Contractual|Seasonal|Project|Probationary"],
+  ["empFrom","Employment From (MM/DD/YYYY)","text"],
+  ["empTo","Employment To (MM/DD/YYYY)","text"],
+  ["reasonSep","Reason of Separation","select","N/A|Terminated|Resigned|Retired|Deceased|End of Contract|Redundancy|Others"],
+  ["substituted","Substituted Filing?","select","Yes|No"]
+];
+const DAT_NT = [["gross","Gross Comp. Income"],["sss","SSS, GSIS, PAG-IBIG & Union Dues"],["basicMWE","Basic Salary (P250,000 & below)"],["salariesMWE","Salaries & Other Forms of Comp."],["thirteen","13th Month & Other Benefits"],["totalNT","Total Nontaxable/Exempt Comp."],["deminimis","De Minimis Benefits"]];
+const DAT_TX = [["basic","Taxable Basic Salary"],["thirteen","13th Month & Other Benefits"],["salaries","Salaries & Other Compensation"],["total","Total Taxable Compensation"]];
+const DAT_OTHER = [["netTaxable","Net Taxable Comp. Income"],["taxDue","Tax Due (Jan.–Dec.)"],["twPresent","Tax Withheld Present Employer (Jan.–Nov.)"],["twPrevious","Tax Withheld Previous Employer (Jan.–Nov.)"],["twDec","Amount Withheld and Paid for in Dec"],["overRefunded","Overwithheld Tax Refunded"],["pera","5% Tax Credit (PERA Act of 2008)"],["twAdjusted","Amount of Tax Withheld as Adjusted"]];
+function datRecordKey(e){ return e.empId || ("k"+(e.tin||e.name||"").replace(/\W/g,"")); }
+function datDefaults(e){                                 // pre-fill from the annualization
+  const p = e.pres || { gross:0,nonTax:0,taxable:0,withheld:0,mwe:0,thirteen:0,demin:0,contrib:0 };
+  const v = e.prev || null;
+  const type = (e.type||"T").toUpperCase();
+  const d = {};
+  DAT_HEADER.forEach(f=> d[f[0]] = f[3] ? f[3].split("|")[0] : "");
+  d.empStatus = "Regular"; d.reasonSep = "N/A"; d.substituted = "Yes"; d.nationality = "Filipino";
+  // NON-TAXABLE — present
+  d.nt_p_gross = p.gross; d.nt_p_sss = p.contrib;
+  d.nt_p_basicMWE = type==="M" ? p.mwe : 0; d.nt_p_salariesMWE = 0;
+  d.nt_p_thirteen = p.thirteen; d.nt_p_deminimis = p.demin; d.nt_p_totalNT = p.nonTax;
+  // NON-TAXABLE — previous (only totals were captured on the 2316 popup)
+  d.nt_v_gross = v ? wtcNum(v.gross) : 0; d.nt_v_sss = 0;
+  d.nt_v_basicMWE = 0; d.nt_v_salariesMWE = 0; d.nt_v_thirteen = 0; d.nt_v_deminimis = 0;
+  d.nt_v_totalNT = v ? wtcNum(v.nonTax) : 0;
+  // TAXABLE — present (we hold the total; sub-splits are for the user to allocate)
+  d.tx_p_basic = 0; d.tx_p_thirteen = 0; d.tx_p_salaries = p.taxable; d.tx_p_total = p.taxable;
+  // TAXABLE — previous
+  d.tx_v_basic = 0; d.tx_v_thirteen = 0; d.tx_v_salaries = v ? wtcNum(v.taxable) : 0; d.tx_v_total = v ? wtcNum(v.taxable) : 0;
+  d.tx_totalCombined = p.taxable + (v ? wtcNum(v.taxable) : 0);
+  // OTHER ITEMS
+  d.netTaxable = e.taxable; d.taxDue = e.due;
+  d.twPresent = p.withheld; d.twPrevious = v ? wtcNum(v.withheld) : 0;
+  d.twDec = 0; d.overRefunded = e.adj < 0 ? -e.adj : 0; d.pera = 0;
+  d.twAdjusted = e.withheld;
+  return d;
+}
+let datRecEmpKey = null;
+window.openDatRecord = function(empKey){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const years = [...new Set((c.wtcRecords||[]).map(r=>String(r.period).slice(0,4)))].sort().reverse();
+  const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
+  const { list } = annualizeYear(c, year);
+  const e = list.find(x=> datRecordKey(x) === empKey);
+  if(!e) return;
+  datRecEmpKey = empKey;
+  const saved = ((c.datRecords||{})[year]||{})[empKey] || {};
+  const d = Object.assign(datDefaults(e), saved);       // saved overrides pre-fill
+  const money = (k) => `<div style="display:flex; flex-direction:column;"><input class="wtc-cell ta-r" data-k="${k}" value="${escapeHtml(datFmt(d[k]))}" style="width:100%;"></div>`;
+  const lbl = t => `<div style="font-size:.72rem; color:var(--muted); margin-bottom:2px;">${t}</div>`;
+  const grid = (arr, prefix) => `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 14px;">${arr.map(f=>`<div>${lbl(f[1])}${money(prefix+f[0])}</div>`).join("")}</div>`;
+  const hdrField = f => {
+    const val = d[f[0]]!=null ? d[f[0]] : "";
+    if(f[2]==="select") return `<div>${lbl(f[1])}<select class="wtc-cell" data-k="${f[0]}" style="width:100%;">${f[3].split("|").map(o=>`<option ${o===val?"selected":""}>${o}</option>`).join("")}</select></div>`;
+    return `<div>${lbl(f[1])}<input class="wtc-cell" data-k="${f[0]}" value="${escapeHtml(val)}" style="width:100%;"></div>`;
+  };
+  $("datRecTitle").textContent = `Alphalist record — ${e.name || "employee"}`;
+  $("datRecBody").innerHTML = `
+    <div class="cor-note full" style="margin-bottom:12px;"><span>Values are pre-filled from the annualization; complete or adjust to match the employee's <b>2316</b>. Layout follows the BIR <b>1604C Schedule 1</b> data-entry form.</span></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px; margin-bottom:6px;">
+      <div>${lbl("TIN")}<input class="wtc-cell" value="${escapeHtml(e.tin||"")}" disabled style="width:100%;"></div>
+      <div>${lbl("Last name")}<input class="wtc-cell" value="${escapeHtml((e.ln||"").toUpperCase())}" disabled style="width:100%;"></div>
+      <div>${lbl("First name / MI")}<input class="wtc-cell" value="${escapeHtml(((e.fn||"")+" "+(e.mn||"")).toUpperCase().trim())}" disabled style="width:100%;"></div>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 14px;">${DAT_HEADER.map(hdrField).join("")}</div>
+    <div class="dat-sec">NON-TAXABLE · Present Employer</div>${grid(DAT_NT,"nt_p_")}
+    <div class="dat-sec">NON-TAXABLE · Previous Employer</div>${grid(DAT_NT,"nt_v_")}
+    <div class="dat-sec">TAXABLE · Present Employer</div>${grid(DAT_TX,"tx_p_")}
+    <div class="dat-sec">TAXABLE · Previous Employer</div>${grid(DAT_TX,"tx_v_")}
+    <div class="dat-sec">TAXABLE · Combined</div><div style="max-width:320px;">${lbl("Total Compensation Income (Previous and Present)")}${money("tx_totalCombined")}</div>
+    <div class="dat-sec">OTHER ITEMS</div><div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 14px;">${DAT_OTHER.map(f=>`<div>${lbl(f[1])}${money(f[0])}</div>`).join("")}</div>`;
+  resetModalPosition("datRecOverlay");
+  $("datRecOverlay").classList.add("open");
+};
+function datFmt(n){ const x = +n; return isNaN(x) ? (n||"") : x.toLocaleString("en-PH",{minimumFractionDigits:2, maximumFractionDigits:2}); }
+window.saveDatRecord = function(){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c || !datRecEmpKey) return;
+  const years = [...new Set((c.wtcRecords||[]).map(r=>String(r.period).slice(0,4)))].sort().reverse();
+  const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
+  const rec = {};
+  document.querySelectorAll("#datRecBody [data-k]").forEach(el=>{
+    const k = el.dataset.k, v = el.value.trim();
+    rec[k] = /^(nt_|tx_|net|tax|tw|over|pera)/.test(k) && el.tagName==="INPUT" ? wtcNum(v) : v;
+  });
+  if(!c.datRecords) c.datRecords = {};
+  if(!c.datRecords[year]) c.datRecords[year] = {};
+  c.datRecords[year][datRecEmpKey] = rec;
+  save(); closeOverlays(); render();
+  toast("Alphalist record saved");
+};
+
 function annualizeYear(c, year){
   // latest recorded computation version per month of the year
   const NB = PAYROLL_HEADERS.length;
@@ -4306,6 +4425,8 @@ function annualizeYear(c, year){
     e.empId = m ? m.id : null;
     e.dateHired = m ? (m.dateHired || "") : "";
     // consolidate previous-employer (2316) figures if encoded for this year
+    e.pres = { gross:e.gross, nonTax:e.nonTax, taxable:e.taxable, withheld:e.withheld,
+               mwe:e.mwe, thirteen:e.thirteen, demin:e.demin, contrib:e.contrib };   // present employer only
     const pv = e.empId ? prevAll[e.empId] : null;
     if(pv){
       e.prev = pv;
@@ -4416,15 +4537,28 @@ function renderWpDat(R, c){
     </div></div>`;
   const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
   const { periods, list } = annualizeYear(c, year);
-  const preview = list.length ? annualistRows(list) : [];
-  const fmtN = v => (typeof v === "number") ? (Math.abs(v) < 0.005 ? "—" : wtcFmt(v)) : escapeHtml(v);
-  const bodyRows = preview.map(r=>`<tr>${r.map((v,i)=>`<td class="${i>=7?"ta-r":(i===0||i===5||i===6?"ta-c":"")}">${fmtN(v)}</td>`).join("")}</tr>`).join("");
+  const saved = (c.datRecords||{})[year] || {};
+  const done = list.filter(e=> saved[datRecordKey(e)]).length;
+  const rows = list.map((e,i)=>{
+    const has = !!saved[datRecordKey(e)];
+    return `
+    <tr class="crow" onclick="openDatRecord('${datRecordKey(e)}')">
+      <td class="cmeta">${i+1}</td>
+      <td><div class="cname">${escapeHtml(e.name||"—")}${e.prev?` <span class="pill">+ prev.</span>`:""}</div></td>
+      <td class="due ta-c">${escapeHtml(e.tin||"—")}</td>
+      <td class="due ta-r">${wtcFmt(e.taxable)}</td>
+      <td class="due ta-r">${wtcFmt(e.due)}</td>
+      <td class="due ta-r">${wtcFmt(e.withheld)}</td>
+      <td>${has ? `<span class="flagchip green">Encoded ✓</span>` : `<span class="flagchip grey">Not yet</span>`}</td>
+      <td class="ta-r"><span class="wp-open">${has?"Edit":"Encode"} record →</span></td>
+    </tr>`;
+  }).join("");
   return head + `
     <div class="toolbar">
       <div class="scope-select">Tax year
         ${ddSelect("ddDatYear", years.map(y=>({v:y,label:"TY "+y})), year, "setAnnYear")}
       </div>
-      <div style="flex:1; font-size:.82rem; color:var(--muted); align-self:center;">${list.length} employee${list.length===1?"":"s"} · ${periods.length} month${periods.length===1?"":"s"} recorded in ${year}</div>
+      <div style="flex:1; font-size:.82rem; color:var(--muted); align-self:center;">${done} of ${list.length} record${list.length===1?"":"s"} encoded · ${periods.length} month${periods.length===1?"":"s"} recorded in ${year}</div>
       <details class="tax-dd" onclick="event.stopPropagation();">
         <summary class="dl-summary">⬇ Generate alphalist <span class="dd-chev">▾</span></summary>
         <div class="tax-dd-pop ct-pop">
@@ -4434,12 +4568,12 @@ function renderWpDat(R, c){
       </details>
     </div>
     <div class="card">
-      <div class="card-title">Alphalist — TY ${year} <span class="pill">${list.length}</span></div>
-      <div class="wtc-note">This is the annualized alphalist that feeds the BIR <b>1604-C</b> submission. Generate the Excel/CSV to key into or validate against the <b>Alphalist Data Entry</b> tool. The exact machine <b>.DAT</b> export will be wired here once you share one sample .DAT file for the schema.</div>
-      <div class="wtc-scroll" style="max-height:58vh;">
-      <table style="font-size:.8rem;">
-        <thead><tr>${ANNUALIST_HEADERS.map((h,i)=>`<th class="${i>=7?"ta-r":(i===0||i===5||i===6?"ta-c":"")}">${escapeHtml(h)}</th>`).join("")}</tr></thead>
-        <tbody>${bodyRows || `<tr><td colspan="${ANNUALIST_HEADERS.length}" style="text-align:center; color:var(--muted); padding:24px;">No employees in the recorded computations for ${year}.</td></tr>`}</tbody>
+      <div class="card-title">Alphalist records — TY ${year} <span class="pill">${list.length}</span></div>
+      <div class="wtc-note">Click an employee to encode their <b>1604C Schedule 1</b> record (Non-Taxable / Taxable / Other Items, present &amp; previous employer) — pre-filled from the annualization. The exact machine <b>.DAT</b> export will be wired here once you share one sample .DAT for the schema; meanwhile the Excel/CSV alphalist is available above.</div>
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th style="width:38px;">#</th><th>Employee</th><th class="ta-c">TIN</th><th class="ta-r">Net Taxable</th><th class="ta-r">Tax Due</th><th class="ta-r">Tax Withheld</th><th>Record</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="8" style="text-align:center; color:var(--muted); padding:24px;">No employees in the recorded computations for ${year}.</td></tr>`}</tbody>
       </table>
       </div>
     </div>
