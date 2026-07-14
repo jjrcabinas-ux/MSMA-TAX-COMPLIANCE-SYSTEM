@@ -1435,20 +1435,33 @@ function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%
 function fmtYmd(o){ return `${MONTHS[o.m-1].slice(0,3)} ${o.d}, ${o.y}`; }
 
 /* ============================================================
-   Auth — cluster gate (hash-obfuscated; see deployment note)
+   Auth — Firebase Auth is the gate. No password material ships in
+   this source. Offline sign-in uses a per-device PBKDF2 verifier
+   written only after a successful ONLINE sign-in on that device.
 ============================================================ */
-const cyrb53 = (str, seed = 0) => {
-  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-  for (let i = 0, ch; i < str.length; i++) {
-    ch = str.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
-};
-const CLUSTER_HASHES = { RPM:8648645207156326, ADS:8324280130240436, VCM:7499670937568036 };
+const CLUSTERS = ["RPM", "ADS", "VCM"];
+const PWV_ITER = 150000;
+const pwvKey = c => `msma_pwv_v1_${c}`;
+async function pbkdf2B64(pw, saltBytes){
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name:"PBKDF2", salt: saltBytes, iterations: PWV_ITER, hash:"SHA-256" }, key, 256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+async function saveOfflineVerifier(cl, pw){
+  try{
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    store.set(pwvKey(cl), JSON.stringify({ s: btoa(String.fromCharCode(...salt)), h: await pbkdf2B64(pw, salt), i: PWV_ITER }));
+  }catch(e){ /* WebCrypto unavailable — online-only on this device */ }
+}
+/* true = matches, false = wrong password, null = no verifier on this device */
+async function checkOfflineVerifier(cl, pw){
+  try{
+    const v = JSON.parse(store.get(pwvKey(cl)) || "null");
+    if(!v || !v.s || !v.h) return null;
+    const salt = Uint8Array.from(atob(v.s), ch=>ch.charCodeAt(0));
+    return (await pbkdf2B64(pw, salt)) === v.h;
+  }catch(e){ return null; }
+}
 
 /* ============================================================
    Storage (localStorage w/ in-memory fallback for sandboxes)
@@ -1833,7 +1846,7 @@ $("pwEye").onclick = ()=>{
   $("pwEye").classList.toggle("active", reveal);
   $("pwEye").setAttribute("aria-label", reveal ? "Hide password" : "Show password");
 };
-function tryLogin(){
+async function tryLogin(){
   const err = $("loginErr");
   err.classList.remove("show");
   if(!selCluster){
@@ -1841,20 +1854,43 @@ function tryLogin(){
     void err.offsetWidth; err.classList.add("show"); return;
   }
   const pw = $("loginPw").value;
-  if(cyrb53(pw) !== CLUSTER_HASHES[selCluster]){
-    err.textContent = "Incorrect password for the " + selCluster + " Cluster.";
+  if(!pw){
+    err.textContent = "Enter the " + selCluster + " Cluster password.";
     void err.offsetWidth; err.classList.add("show");
-    $("loginPw").select(); return;
+    $("loginPw").focus(); return;
   }
   // authenticating: show loading state (spinner + disabled)
   const btn = $("btnLogin");
   btn.classList.add("loading"); btn.disabled = true; $("loginPw").disabled = true; $("pwEye").disabled = true;
-  // sign in to Firebase so cloud sync is allowed (password == cluster password).
-  // Fire-and-forget: the app still works locally/offline if this fails.
-  if(window.fbAuth){
-    window.fbAuth.signIn(selCluster, pw)
-      .catch(e => console.warn("[auth] Firebase sign-in failed:", e.code || e.message));
+  const fail = msg => {
+    btn.classList.remove("loading"); btn.disabled = false;
+    $("loginPw").disabled = false; $("pwEye").disabled = false;
+    err.textContent = msg;
+    void err.offsetWidth; err.classList.add("show");
+    $("loginPw").select();
+  };
+  // Firebase Auth is the gate — the password is verified by the server, not this page.
+  let ok = false;
+  try{
+    if(!window.fbAuth) throw { code: "auth/network-request-failed" };
+    await window.fbAuth.signIn(selCluster, pw);
+    ok = true;
+    saveOfflineVerifier(selCluster, pw);               // lets THIS device sign in offline later
+  }catch(e){
+    const code = (e && e.code) || "";
+    if(["auth/wrong-password","auth/invalid-credential","auth/invalid-login-credentials","auth/user-not-found"].includes(code)){
+      return fail("Incorrect password for the " + selCluster + " Cluster.");
+    }
+    if(code === "auth/too-many-requests"){
+      return fail("Too many attempts — sign-in is temporarily locked. Try again in a few minutes.");
+    }
+    // network / server unreachable: fall back to this device's offline verifier
+    const off = await checkOfflineVerifier(selCluster, pw);
+    if(off === true){ ok = true; }
+    else if(off === false){ return fail("Incorrect password for the " + selCluster + " Cluster."); }
+    else { return fail("Can't reach the server, and this device hasn't signed in before. Connect to the internet for the first sign-in."); }
   }
+  if(!ok) return;
   session.set("msma_cluster", selCluster);
   if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches){
     setTimeout(()=> enterApp(selCluster), 400);   // skip the animation
@@ -4615,7 +4651,7 @@ tickClock(); setInterval(tickClock, 1000);
 // restore session if the tab was already signed in
 (function boot(){
   const saved = session.get("msma_cluster");
-  if(saved && CLUSTER_HASHES[saved]) enterApp(saved);
+  if(saved && CLUSTERS.includes(saved)) enterApp(saved);
 })();
 </script>
 
