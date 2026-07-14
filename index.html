@@ -4138,6 +4138,47 @@ function renderWpDraft(R, c){
 
 /* ---- 1601-C Annualization: year-end reconciliation from the recorded computations ---- */
 window.setAnnYear = function(y){ wpAnnYear = y; render(); };
+const ANNUALIST_HEADERS = ["SEQ","TIN","LAST NAME","FIRST NAME","MIDDLE NAME","TYPE","MONTHS",
+  "GROSS COMPENSATION","MWE / EXEMPT","13TH MONTH & OTHER BENEFITS","DE MINIMIS",
+  "SSS/GSIS/PHIC/HDMF & UNION DUES","TOTAL NON-TAXABLE","TAXABLE COMPENSATION",
+  "TAX WITHHELD","ANNUAL TAX DUE","OVER/(UNDER) WITHHELD"];
+function annualistRows(list){
+  return list.map((e,i)=>[
+    i+1, e.tin||"", (e.ln||"").toUpperCase(), (e.fn||"").toUpperCase(), (e.mn||"").toUpperCase(), e.type||"T", e.months,
+    round2(e.gross), round2(e.mwe), round2(e.thirteen), round2(e.demin), round2(e.contrib),
+    round2(e.nonTax), round2(e.taxable), round2(e.withheld), round2(e.due), round2(-e.adj)   // over/(under): +over-withheld, -under
+  ]);
+}
+function round2(n){ return Math.round((+n||0)*100)/100; }
+window.downloadAnnualist = async function(fmt){
+  document.querySelectorAll(".tax-dd[open]").forEach(d=> d.removeAttribute("open"));
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const years = [...new Set((c.wtcRecords||[]).map(r=>String(r.period).slice(0,4)))].sort().reverse();
+  const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
+  if(!year){ toast("No recorded computations to export"); return; }
+  const { list } = annualizeYear(c, year);
+  if(!list.length){ toast("No employees to export for " + year); return; }
+  const rows = annualistRows(list);
+  const base = `${c.name.replace(/[^\w ]+/g,"").trim().replace(/ +/g,"_")}_Alphalist_1604C_${year}`;
+  if(fmt === "csv"){
+    const esc = v => { const s = String(v==null?"":v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+    const csv = [ANNUALIST_HEADERS, ...rows].map(r=>r.map(esc).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" }));
+    a.download = base + ".csv"; a.click();
+    setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+    toast("Alphalist CSV downloaded");
+    return;
+  }
+  try{ await loadSheetJS(); }catch(e){ toast("Couldn't load the Excel engine — check your internet connection"); return; }
+  const ws = XLSX.utils.aoa_to_sheet([ANNUALIST_HEADERS, ...rows]);
+  ws["!cols"] = ANNUALIST_HEADERS.map((h,i)=>({ wch: i>=7 ? 18 : Math.max(8, Math.min(18, h.length+2)) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Alphalist " + year);
+  XLSX.writeFile(wb, base + ".xlsx");
+  toast("Alphalist Excel downloaded");
+};
 function annualizeYear(c, year){
   // latest recorded computation version per month of the year
   const NB = PAYROLL_HEADERS.length;
@@ -4155,12 +4196,18 @@ function annualizeYear(c, year){
       const name = row[6] || "", tin = row[7] || "";
       const key = digits(tin) || normName(name);
       if(!key) return;
-      const e = emps[key] || (emps[key] = { name, tin, months:0, gross:0, nonTax:0, taxable:0, withheld:0 });
+      const e = emps[key] || (emps[key] = { name, tin, ln:row[3]||"", fn:row[4]||"", mn:row[5]||"", type:row[NB+4]||"T", months:0, gross:0, mwe:0, thirteen:0, demin:0, contrib:0, nonTax:0, taxable:0, withheld:0 });
       if(!e.name && name) e.name = name;
       if(!e.tin && tin) e.tin = tin;
+      if(!e.ln && row[3]) e.ln = row[3];
+      if(!e.fn && row[4]) e.fn = row[4];
+      if(!e.mn && row[5]) e.mn = row[5];
       e.months++;
+      const mwe = Math.abs(wtcNum(row[NB+6])) + Math.abs(wtcNum(row[NB+7]));
+      const thirteen = wtcNum(row[NB+8]), demin = wtcNum(row[NB+9]), contrib = Math.abs(wtcNum(row[NB+10]));
+      e.mwe += mwe; e.thirteen += thirteen; e.demin += demin; e.contrib += contrib;
       e.gross    += wtcNum(row[NB+5]);
-      e.nonTax   += Math.abs(wtcNum(row[NB+6])) + Math.abs(wtcNum(row[NB+7])) + wtcNum(row[NB+8]) + wtcNum(row[NB+9]) + Math.abs(wtcNum(row[NB+10]));
+      e.nonTax   += mwe + thirteen + demin + contrib;
       e.taxable  += wtcNum(row[NB+12]);
       e.withheld += wtcNum(row[NB+13]);
     });
@@ -4207,6 +4254,13 @@ function renderWpAnnualization(R, c){
         ${ddSelect("ddAnnYear", years.map(y=>({v:y,label:"TY "+y})), year, "setAnnYear")}
       </div>
       <div style="flex:1; font-size:.82rem; color:var(--muted); align-self:center;">${periods.length} month${periods.length===1?"":"s"} recorded in ${year} · ${list.length} employee${list.length===1?"":"s"}</div>
+      <details class="tax-dd" onclick="event.stopPropagation();">
+        <summary class="dl-summary">⬇ Download alphalist <span class="dd-chev">▾</span></summary>
+        <div class="tax-dd-pop ct-pop">
+          <button class="ct-link" onclick="downloadAnnualist('xlsx')">Excel (.xlsx)</button>
+          <button class="ct-link" onclick="downloadAnnualist('csv')">CSV (.csv)</button>
+        </div>
+      </details>
     </div>
     <div class="card">
       <div class="card-title">Annualized withholding — TY ${year} <span class="pill">${list.length}</span></div>
