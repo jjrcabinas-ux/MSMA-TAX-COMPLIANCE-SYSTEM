@@ -1820,6 +1820,7 @@ let wpWtcEditPeriod = null;      // period of the record being edited (prefills 
 let wpWtcEditRecId = null;       // record targeted by the edit-reason popup
 let wpDraftPeriod = null;        // period whose 1601-C draft is open
 let wpDraftView = null;          // "summary" = the monthly summary work area
+let wpAnnYear = null;            // tax year selected in the Annualization module
 let attnExpanded = false;        // Needs-attention list: false = show first 10 only
 
 // start each return at its latest closed period that actually has a filing (≥ floor)
@@ -2332,6 +2333,13 @@ function wtcTax(freq, taxable){
   for(const br of t){ if(taxable >= br[0]) b = br; else break; }
   return Math.max(0, b[1] + b[2] * (taxable - b[0]));
 }
+/* Annual graduated income tax table (TRAIN, rates effective 2023) — for year-end annualization */
+const ANNUAL_TAX_TABLE = [[0,0,0],[250000,0,.15],[400000,22500,.20],[800000,102500,.25],[2000000,402500,.30],[8000000,2202500,.35]];
+function annualTax(taxable){
+  let b = ANNUAL_TAX_TABLE[0];
+  for(const br of ANNUAL_TAX_TABLE){ if(taxable >= br[0]) b = br; else break; }
+  return Math.max(0, b[1] + b[2] * (taxable - b[0]));
+}
 function wtcNum(v){                                    // "(1,750.00)" → -1750; blanks → 0
   const s = String(v == null ? "" : v).trim();
   if(!s) return 0;
@@ -2619,11 +2627,12 @@ function renderWpDetail(){
       if(wpSection === "employees") return renderWpEmployees(R, c);
       if(wpSection === "computation") return renderWpComputation(R, c);
       if(wpSection === "draft") return renderWpDraft(R, c);
+      if(wpSection === "annualization") return renderWpAnnualization(R, c);
       const MODULES = [
         {key:"employees",     label:"Employee Masterlist",          desc:"Company employees covered by payroll withholding", ready:true},
         {key:"computation",   label:"Withholding Tax Computation",  desc:"Verify payroll data, then compute withholding",     ready:true},
         {key:"draft",         label:"Draft Return",                 desc:"1601-C drafted from the recorded computation",     ready:true},
-        {key:"annualization", label:"Annualization",                desc:"Year-end annualized withholding adjustment",       ready:false},
+        {key:"annualization", label:"Annualization",                desc:"Year-end annualized withholding adjustment",       ready:true},
         {key:"dat",           label:"DAT File",                     desc:"Alphalist DAT file generation",                    ready:false}
       ];
       const modCards = MODULES.map(m=>`
@@ -4124,6 +4133,103 @@ function renderWpDraft(R, c){
     <div class="toolbar" style="margin-top:4px;">
       <div style="flex:1;"></div>
       <button class="btn ghost" onclick="wpDraftView=null; render();">← Back to drafts</button>
+    </div>`;
+}
+
+/* ---- 1601-C Annualization: year-end reconciliation from the recorded computations ---- */
+window.setAnnYear = function(y){ wpAnnYear = y; render(); };
+function annualizeYear(c, year){
+  // latest recorded computation version per month of the year
+  const NB = PAYROLL_HEADERS.length;
+  const byPeriod = {};
+  (c.wtcRecords||[]).forEach(r=>{
+    if(String(r.period).slice(0,4) !== String(year)) return;
+    if(!byPeriod[r.period] || r.version > byPeriod[r.period].version) byPeriod[r.period] = r;
+  });
+  const periods = Object.keys(byPeriod).sort();
+  const emps = {};                                     // keyed by TIN digits (else normalized name)
+  const digits = s => String(s||"").replace(/\D/g,"");
+  const normName = s => String(s||"").toUpperCase().replace(/[^A-Z ]/g," ").replace(/\s+/g," ").trim();
+  periods.forEach(p=>{
+    byPeriod[p].rows.forEach(row=>{
+      const name = row[6] || "", tin = row[7] || "";
+      const key = digits(tin) || normName(name);
+      if(!key) return;
+      const e = emps[key] || (emps[key] = { name, tin, months:0, gross:0, nonTax:0, taxable:0, withheld:0 });
+      if(!e.name && name) e.name = name;
+      if(!e.tin && tin) e.tin = tin;
+      e.months++;
+      e.gross    += wtcNum(row[NB+5]);
+      e.nonTax   += Math.abs(wtcNum(row[NB+6])) + Math.abs(wtcNum(row[NB+7])) + wtcNum(row[NB+8]) + wtcNum(row[NB+9]) + Math.abs(wtcNum(row[NB+10]));
+      e.taxable  += wtcNum(row[NB+12]);
+      e.withheld += wtcNum(row[NB+13]);
+    });
+  });
+  const list = Object.values(emps).map(e=>{
+    const due = annualTax(e.taxable);
+    return Object.assign(e, { due, adj: due - e.withheld });   // adj>0 = collectible (under-withheld); <0 = refund
+  }).sort((a,b)=> a.name.localeCompare(b.name));
+  return { periods, list };
+}
+function renderWpAnnualization(R, c){
+  const head = `
+    <div class="page-head">
+      <h1>Annualization</h1>
+      <button class="btn ghost wp-back" onclick="backToWpSections()">← ${R.form} · ${escapeHtml(c.name)}</button>
+      <div class="sub">${escapeHtml(c.name)} · year-end withholding tax reconciliation, aggregated from the recorded monthly computations</div>
+    </div>`;
+  const years = [...new Set((c.wtcRecords||[]).map(r=>String(r.period).slice(0,4)))].sort().reverse();
+  if(!years.length) return head + `
+    <div class="card"><div class="attn-empty" style="min-height:190px;">
+      <div>No recorded Withholding Tax Computation yet for <b>${escapeHtml(c.name)}</b>.<br>Annualization builds on the year's recorded monthly computations — record some first.</div>
+      <button class="btn" style="margin-top:14px;" onclick="openWpSection('computation')">Open Withholding Tax Computation</button>
+    </div></div>`;
+  const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
+  const { periods, list } = annualizeYear(c, year);
+  const F = v => Math.abs(v) < 0.005 ? `<span style="color:var(--muted);">—</span>` : wtcFmt(v);
+  const tot = list.reduce((a,e)=>({ gross:a.gross+e.gross, nonTax:a.nonTax+e.nonTax, taxable:a.taxable+e.taxable, withheld:a.withheld+e.withheld, due:a.due+e.due, adj:a.adj+e.adj }), { gross:0,nonTax:0,taxable:0,withheld:0,due:0,adj:0 });
+  const rows = list.map((e,i)=>`
+    <tr>
+      <td class="cmeta">${i+1}</td>
+      <td><div class="cname">${escapeHtml(e.name||"—")}</div></td>
+      <td class="due ta-c">${escapeHtml(e.tin||"—")}</td>
+      <td class="due ta-c">${e.months}</td>
+      <td class="due ta-r">${F(e.gross)}</td>
+      <td class="due ta-r">${F(e.nonTax)}</td>
+      <td class="due ta-r" style="font-weight:700;">${F(e.taxable)}</td>
+      <td class="due ta-r">${F(e.withheld)}</td>
+      <td class="due ta-r">${F(e.due)}</td>
+      <td class="due ta-r ${Math.abs(e.adj)>0.009?(e.adj>0?"wtc-warn":""):""}" style="font-weight:700;${e.adj<-0.009?"color:#00a25b;":""}">${F(e.adj)}</td>
+    </tr>`).join("");
+  return head + `
+    <div class="toolbar">
+      <div class="scope-select">Tax year
+        ${ddSelect("ddAnnYear", years.map(y=>({v:y,label:"TY "+y})), year, "setAnnYear")}
+      </div>
+      <div style="flex:1; font-size:.82rem; color:var(--muted); align-self:center;">${periods.length} month${periods.length===1?"":"s"} recorded in ${year} · ${list.length} employee${list.length===1?"":"s"}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Annualized withholding — TY ${year} <span class="pill">${list.length}</span></div>
+      <div class="wtc-note"><b>Adjustment</b> = annual tax due − tax withheld. A positive figure is <b>collectible</b> (under-withheld); a figure in <span style="color:#00a25b;">green parentheses</span> is a <b>refund</b> to the employee (over-withheld). Annual tax due uses the BIR annual graduated table.</div>
+      <div class="wtc-scroll" style="max-height:60vh;">
+      <table style="font-size:.82rem;">
+        <thead><tr>
+          <th style="width:38px;">#</th><th>Employee</th><th class="ta-c">TIN</th><th class="ta-c">Mos.</th>
+          <th class="ta-r">Gross Compensation</th><th class="ta-r">Non-Taxable</th><th class="ta-r">Taxable</th>
+          <th class="ta-r">Tax Withheld</th><th class="ta-r">Annual Tax Due</th><th class="ta-r">Adjustment</th>
+        </tr></thead>
+        <tbody>${rows || `<tr><td colspan="10" style="text-align:center; color:var(--muted); padding:24px;">No employees in the recorded computations for ${year}.</td></tr>`}</tbody>
+        ${list.length ? `<tfoot><tr class="draft-strong">
+          <td></td><td>TOTAL</td><td></td><td></td>
+          <td class="ta-r">${F(tot.gross)}</td><td class="ta-r">${F(tot.nonTax)}</td><td class="ta-r">${F(tot.taxable)}</td>
+          <td class="ta-r">${F(tot.withheld)}</td><td class="ta-r">${F(tot.due)}</td><td class="ta-r">${F(tot.adj)}</td>
+        </tr></tfoot>` : ""}
+      </table>
+      </div>
+    </div>
+    <div class="toolbar" style="margin-top:4px;">
+      <div style="flex:1; font-size:.82rem; color:var(--muted);">Figures aggregate each employee's recorded monthly computations for the year. Mid-year hires, previous-employer (2316) amounts, and the ₱90,000 13th-month cap are not yet applied — tell us your annualization sheet's format and we'll model it exactly.</div>
+      <button class="btn ghost" onclick="backToWpSections()">← Back to modules</button>
     </div>`;
 }
 
