@@ -1022,7 +1022,6 @@
     </div>
     <footer>
       <button class="danger-link" id="btnDeleteClient" style="display:none;">Delete client</button>
-      <button class="btn ghost" id="btnCreds" style="display:none;" onclick="openCreds()">🔐 BIR credentials</button>
       <div class="right">
         <button class="btn ghost" data-close="clientOverlay">Cancel</button>
         <button class="btn" id="btnSaveClient">Save client</button>
@@ -1336,24 +1335,6 @@
   </div>
 </div>
 
-<!-- BIR credentials vault (client-side encrypted) -->
-<div class="overlay" id="credOverlay">
-  <div class="modal" role="dialog" aria-modal="true" style="width:min(640px, 94vw); max-width:none;">
-    <header>
-      <h2 id="credTitle">BIR credentials</h2>
-      <button class="xclose" data-close="credOverlay">✕</button>
-    </header>
-    <div class="body" style="display:block;">
-      <div id="credBody"></div>
-    </div>
-    <footer>
-      <div class="right">
-        <button class="btn ghost" data-close="credOverlay">Close</button>
-      </div>
-    </footer>
-  </div>
-</div>
-
 <!-- Company summary detail -->
 <div class="overlay" id="compDetailOverlay" onclick="if(event.target===this) closeOverlays();">
   <div class="modal" role="dialog" aria-modal="true" style="width:min(820px, 94vw); max-width:none;">
@@ -1490,43 +1471,6 @@ async function saveOfflineVerifier(cl, pw){
     store.set(pwvKey(cl), JSON.stringify({ s: btoa(String.fromCharCode(...salt)), h: await pbkdf2B64(pw, salt), i: PWV_ITER }));
   }catch(e){ /* WebCrypto unavailable — online-only on this device */ }
 }
-/* ============================================================
-   Credentials vault — AES-GCM under a passphrase-derived key.
-   The passphrase and the derived key NEVER touch storage; the
-   workspace payload / localStorage / history hold ciphertext only.
-============================================================ */
-const VAULT_ITER = 310000;
-const VAULT_TTL_MS = 5 * 60 * 1000;                    // auto-lock after 5 idle minutes
-const VAULT_CHECK = "msma-vault-v1";
-let vaultKey = null, vaultTimer = null;
-const vb64e = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
-const vb64d = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
-async function deriveVaultKey(pass, saltBytes, iter){
-  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey({ name:"PBKDF2", salt: saltBytes, iterations: iter || VAULT_ITER, hash:"SHA-256" },
-    km, { name:"AES-GCM", length:256 }, false, ["encrypt","decrypt"]);
-}
-async function vaultEncrypt(key, obj){
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
-  return { iv: vb64e(iv), ct: vb64e(ct) };
-}
-async function vaultDecrypt(key, box){
-  const pt = await crypto.subtle.decrypt({ name:"AES-GCM", iv: vb64d(box.iv) }, key, vb64d(box.ct));
-  return JSON.parse(new TextDecoder().decode(pt));
-}
-function armVaultTimer(){
-  clearTimeout(vaultTimer);
-  vaultTimer = setTimeout(lockVault, VAULT_TTL_MS);
-}
-function lockVault(){
-  if(!vaultKey) return;
-  vaultKey = null;
-  clearTimeout(vaultTimer);
-  toast("Credentials vault locked");
-  if($("credOverlay") && $("credOverlay").classList.contains("open")) renderCredBody();
-}
-
 /* true = matches, false = wrong password, null = no verifier on this device */
 async function checkOfflineVerifier(cl, pw){
   try{
@@ -4736,154 +4680,8 @@ window.openClient = function(id){
   if(!id && TAX_PAGES[view]) setTaxChip(view, true);
   resetModalPosition("clientOverlay");
   $("btnDeleteClient").style.display = id ? "inline" : "none";
-  $("btnCreds").style.display = id ? "" : "none";      // credentials live on saved clients only
   $("clientOverlay").classList.add("open");
   $("fName").focus();
-};
-
-/* ---- BIR credentials vault UI ---- */
-let credClientId = null;
-window.openCreds = function(){
-  if(!editingClientId) return;
-  credClientId = editingClientId;
-  const c = db.clients.find(x=>x.id===credClientId);
-  $("credTitle").textContent = "BIR credentials — " + (c ? c.name : "");
-  renderCredBody();
-  resetModalPosition("credOverlay");
-  $("credOverlay").classList.add("open");
-};
-let credRenderSeq = 0;                                 // stale async renders must never overwrite newer state
-async function renderCredBody(){
-  const seq = ++credRenderSeq;
-  const el = $("credBody");
-  if(!el) return;
-  const stale = () => seq !== credRenderSeq;
-  const warn = `<div class="cor-note full" style="margin-bottom:12px;">
-    <span>Credentials are encrypted <b>on this device</b> before they sync — the server only ever stores ciphertext.
-    <b>If the vault passphrase is lost, they cannot be recovered.</b> The vault auto-locks after 5 idle minutes.</span></div>`;
-  /* no vault yet: create it */
-  if(!db.vault){
-    el.innerHTML = warn + `
-      <div class="field full"><label>Choose a vault passphrase (10+ characters)</label>
-        <input type="password" id="vpNew" placeholder="A long passphrase your team shares" autocomplete="off"></div>
-      <div class="field full" style="margin-top:10px;"><label>Repeat it</label>
-        <input type="password" id="vpNew2" autocomplete="off"></div>
-      <div class="login-err" id="credErr" style="position:static; margin-top:10px;"></div>
-      <div style="margin-top:14px; text-align:right;"><button class="btn" onclick="vaultCreate()">Create vault &amp; unlock</button></div>`;
-    return;
-  }
-  /* vault exists but locked */
-  if(!vaultKey){
-    el.innerHTML = warn + `
-      <div class="field full"><label>Vault passphrase</label>
-        <input type="password" id="vpUnlock" autocomplete="off" onkeydown="if(event.key==='Enter') vaultUnlock()"></div>
-      <div class="login-err" id="credErr" style="position:static; margin-top:10px;"></div>
-      <div style="margin-top:14px; text-align:right;"><button class="btn" onclick="vaultUnlock()">Unlock</button></div>`;
-    const inp = $("vpUnlock"); if(inp) inp.focus();
-    return;
-  }
-  /* unlocked: decrypt this client's entries */
-  armVaultTimer();
-  let entries = [];
-  const box = (db.vault.creds || {})[credClientId];
-  if(box){
-    try{ entries = await vaultDecrypt(vaultKey, box); }
-    catch(e){ if(stale()) return; el.innerHTML = `<div class="attn-empty" style="min-height:90px;"><div>Couldn't decrypt this client's entries — the vault passphrase may have changed on another device. Lock and unlock with the current passphrase.</div></div>`; return; }
-  }
-  if(stale() || !vaultKey) return;                     // locked (or re-rendered) while we were decrypting
-  if(!entries.length) entries = [{ label:"eFPS", user:"", pass:"" }];
-  el.innerHTML = warn + `
-    <table>
-      <thead><tr><th style="width:130px;">Portal</th><th>Username / email</th><th>Password</th><th style="width:40px;"></th></tr></thead>
-      <tbody id="credRows">${entries.map(en=>credRowHtml(en)).join("")}</tbody>
-    </table>
-    <div style="margin-top:10px;"><button class="btn ghost" style="font-size:.8rem;" onclick="credAddRow()">+ Add credential</button></div>
-    <div class="login-err" id="credErr" style="position:static; margin-top:10px;"></div>
-    <div style="display:flex; gap:10px; margin-top:14px; align-items:center;">
-      <a href="#" onclick="event.preventDefault(); credChangePass();" style="color:var(--accent); font-size:.8rem;">Change passphrase</a>
-      <div style="flex:1;"></div>
-      <button class="btn ghost" onclick="lockVault()">Lock now</button>
-      <button class="btn" onclick="credSave()">Save credentials</button>
-    </div>
-    <div id="credPassChange" style="display:none; margin-top:12px; border-top:1px solid var(--line); padding-top:12px;">
-      <div class="field full"><label>New passphrase (10+ characters)</label><input type="password" id="vpChange" autocomplete="off"></div>
-      <div class="field full" style="margin-top:8px;"><label>Repeat it</label><input type="password" id="vpChange2" autocomplete="off"></div>
-      <div style="margin-top:10px; text-align:right;"><button class="btn" onclick="credChangePassGo()">Re-encrypt everything</button></div>
-    </div>`;
-}
-function credRowHtml(en){
-  return `<tr>
-    <td style="padding:6px;"><input class="wtc-cell" style="width:100%;" value="${escapeHtml(en.label||"")}" placeholder="eFPS / ORUS…" data-k="label"></td>
-    <td style="padding:6px;"><input class="wtc-cell" style="width:100%;" value="${escapeHtml(en.user||"")}" placeholder="username or email" data-k="user" autocomplete="off"></td>
-    <td style="padding:6px;"><div style="display:flex; gap:4px; align-items:center;">
-      <input class="wtc-cell" style="flex:1;" type="password" value="${escapeHtml(en.pass||"")}" data-k="pass" autocomplete="new-password">
-      <button class="btn ghost" style="padding:3px 8px; font-size:.72rem;" onclick="const i=this.parentNode.querySelector('input'); i.type = i.type==='password'?'text':'password'; armVaultTimer();">👁</button>
-    </div></td>
-    <td style="padding:6px;" class="ta-c"><button class="btn ghost" style="padding:3px 9px; font-size:.72rem;" onclick="this.closest('tr').remove()">✕</button></td>
-  </tr>`;
-}
-window.credAddRow = function(){
-  $("credRows").insertAdjacentHTML("beforeend", credRowHtml({ label:"", user:"", pass:"" }));
-  armVaultTimer();
-};
-function credErrShow(msg){ const e = $("credErr"); if(e){ e.textContent = msg; e.classList.add("show"); } }
-window.vaultCreate = async function(){
-  const p1 = $("vpNew").value, p2 = $("vpNew2").value;
-  if(p1.length < 10) return credErrShow("Use at least 10 characters — a long passphrase is your only protection.");
-  if(p1 !== p2) return credErrShow("The passphrases don't match.");
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await deriveVaultKey(p1, salt);
-  db.vault = { v:1, iter: VAULT_ITER, salt: vb64e(salt), check: await vaultEncrypt(key, VAULT_CHECK), creds:{} };
-  vaultKey = key; armVaultTimer();
-  save(); toast("Vault created and unlocked");
-  renderCredBody();
-};
-window.vaultUnlock = async function(){
-  const pass = $("vpUnlock").value;
-  if(!pass) return credErrShow("Enter the vault passphrase.");
-  try{
-    const key = await deriveVaultKey(pass, vb64d(db.vault.salt), db.vault.iter);
-    const chk = await vaultDecrypt(key, db.vault.check);
-    if(chk !== VAULT_CHECK) throw new Error("bad check");
-    vaultKey = key; armVaultTimer();
-    renderCredBody();
-  }catch(e){ credErrShow("Wrong passphrase."); }
-};
-window.credSave = async function(){
-  if(!vaultKey) return;
-  const entries = [...document.querySelectorAll("#credRows tr")].map(tr=>{
-    const g = k => { const i = tr.querySelector(`input[data-k="${k}"]`); return i ? i.value.trim() : ""; };
-    return { label: g("label"), user: g("user"), pass: tr.querySelector('input[data-k="pass"]') ? tr.querySelector('input[data-k="pass"]').value : "" };
-  }).filter(en=> en.label || en.user || en.pass);
-  if(!db.vault.creds) db.vault.creds = {};
-  if(entries.length) db.vault.creds[credClientId] = await vaultEncrypt(vaultKey, entries);
-  else delete db.vault.creds[credClientId];
-  armVaultTimer();
-  save(); toast("Credentials encrypted and saved");
-};
-window.credChangePass = function(){
-  const box = $("credPassChange");
-  box.style.display = box.style.display === "none" ? "" : "none";
-};
-window.credChangePassGo = async function(){
-  if(!vaultKey) return;
-  const p1 = $("vpChange").value, p2 = $("vpChange2").value;
-  if(p1.length < 10) return credErrShow("Use at least 10 characters.");
-  if(p1 !== p2) return credErrShow("The passphrases don't match.");
-  // decrypt everything with the old key, re-encrypt under the new one
-  const plain = {};
-  for(const cid of Object.keys(db.vault.creds || {})){
-    try{ plain[cid] = await vaultDecrypt(vaultKey, db.vault.creds[cid]); }
-    catch(e){ return credErrShow("Couldn't re-encrypt — an entry failed to decrypt. Unlock with the current passphrase first."); }
-  }
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await deriveVaultKey(p1, salt);
-  const creds = {};
-  for(const cid of Object.keys(plain)) creds[cid] = await vaultEncrypt(key, plain[cid]);
-  db.vault = { v:1, iter: VAULT_ITER, salt: vb64e(salt), check: await vaultEncrypt(key, VAULT_CHECK), creds };
-  vaultKey = key; armVaultTimer();
-  save(); toast("Vault passphrase changed — everything re-encrypted");
-  renderCredBody();
 };
 
 /* ---- Applicable tax-type chips ---- */
