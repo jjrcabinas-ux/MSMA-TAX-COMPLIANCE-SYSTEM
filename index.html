@@ -1335,6 +1335,26 @@
   </div>
 </div>
 
+<!-- Mid-year hires: previous-employer (2316) data -->
+<div class="overlay" id="annPrevOverlay" onclick="if(event.target===this) closeOverlays();">
+  <div class="modal" role="dialog" aria-modal="true" style="width:min(880px, 96vw); max-width:none;">
+    <header>
+      <h2 id="annPrevTitle">Mid-year hires — previous employer</h2>
+      <button class="xclose" data-close="annPrevOverlay">✕</button>
+    </header>
+    <div class="body" style="display:block;">
+      <p class="imp-cols" style="line-height:1.55; margin-bottom:12px;">These employees were <b>hired during the year</b>, so their annualization must include compensation from their <b>previous employer</b> (per BIR Form 2316). Encode those figures below; leave a row blank if the employee had no prior employer this year.</p>
+      <div id="annPrevBody"></div>
+    </div>
+    <footer>
+      <div class="right">
+        <button class="btn ghost" data-close="annPrevOverlay">Cancel</button>
+        <button class="btn" onclick="saveAnnPrev()">Save &amp; annualize</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
 <!-- Company summary detail -->
 <div class="overlay" id="compDetailOverlay" onclick="if(event.target===this) closeOverlays();">
   <div class="modal" role="dialog" aria-modal="true" style="width:min(820px, 94vw); max-width:none;">
@@ -4138,7 +4158,69 @@ function renderWpDraft(R, c){
 }
 
 /* ---- 1601-C Annualization: year-end reconciliation from the recorded computations ---- */
-window.setAnnYear = function(y){ wpAnnYear = y; render(); };
+let annPrevAutoShown = false;
+window.setAnnYear = function(y){ wpAnnYear = y; annPrevAutoShown = false; render(); };
+window.openAnnPrev = function(){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const years = [...new Set((c.wtcRecords||[]).map(r=>String(r.period).slice(0,4)))].sort().reverse();
+  const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
+  const { list } = annualizeYear(c, year);
+  const mid = annMidYearHires(list, year);
+  $("annPrevTitle").textContent = `Mid-year hires ${year} — previous employer`;
+  const saved = (c.annPrev || {})[year] || {};
+  if(!mid.length){
+    $("annPrevBody").innerHTML = `<div class="attn-empty" style="min-height:110px;"><div>No employees were hired during <b>${year}</b> (based on Date Hired in the masterlist). Nothing to consolidate.</div></div>`;
+  } else {
+    $("annPrevBody").innerHTML = `
+      <div class="table-scroll"><table style="font-size:.82rem;">
+        <thead><tr><th>Employee</th><th>Date hired</th><th>Prev. employer</th><th>Prev. TIN</th>
+          <th class="ta-r">Gross</th><th class="ta-r">Non-taxable</th><th class="ta-r">Taxable</th><th class="ta-r">Tax withheld</th></tr></thead>
+        <tbody>${mid.map(e=>{
+          const p = saved[e.empId] || {};
+          const inp = (k,ph,cls) => `<input class="wtc-cell ${cls||''}" data-emp="${e.empId}" data-k="${k}" value="${escapeHtml(p[k]||"")}" placeholder="${ph}" style="width:100%;">`;
+          return `<tr>
+            <td><div class="cname">${escapeHtml(e.name||"—")}</div><div class="cmeta">${escapeHtml(e.tin||"")}</div></td>
+            <td class="due">${escapeHtml(fmtDateMDY(e.dateHired)||"—")}</td>
+            <td style="padding:5px;">${inp("employer","Employer name")}</td>
+            <td style="padding:5px;">${inp("employerTin","000-000-000-000","ta-c")}</td>
+            <td style="padding:5px;">${inp("gross","0.00","ta-r")}</td>
+            <td style="padding:5px;">${inp("nonTax","0.00","ta-r")}</td>
+            <td style="padding:5px;">${inp("taxable","0.00","ta-r")}</td>
+            <td style="padding:5px;">${inp("withheld","0.00","ta-r")}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table></div>
+      <div class="wtc-note">Taxable and Tax withheld are the figures that fold into the annualization. Amounts come straight from the employee's <b>2316 from the previous employer</b>.</div>`;
+  }
+  resetModalPosition("annPrevOverlay");
+  $("annPrevOverlay").classList.add("open");
+};
+window.saveAnnPrev = function(){
+  const c = db.clients.find(x=>x.id===wpClient);
+  if(!c) return;
+  const years = [...new Set((c.wtcRecords||[]).map(r=>String(r.period).slice(0,4)))].sort().reverse();
+  const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
+  if(!c.annPrev) c.annPrev = {};
+  const byEmp = {};
+  document.querySelectorAll("#annPrevBody input.wtc-cell").forEach(inp=>{
+    const id = inp.dataset.emp, k = inp.dataset.k, v = inp.value.trim();
+    (byEmp[id] = byEmp[id] || {})[k] = v;
+  });
+  const yearMap = {};
+  Object.keys(byEmp).forEach(id=>{
+    const r = byEmp[id];
+    // keep the row only if it carries a figure or an employer name
+    if((r.employer||"").trim() || wtcNum(r.gross) || wtcNum(r.taxable) || wtcNum(r.withheld) || wtcNum(r.nonTax)){
+      yearMap[id] = { employer:r.employer||"", employerTin:r.employerTin||"",
+        gross: wtcNum(r.gross), nonTax: wtcNum(r.nonTax), taxable: wtcNum(r.taxable), withheld: wtcNum(r.withheld) };
+    }
+  });
+  c.annPrev[year] = yearMap;
+  annPrevAutoShown = true;
+  save(); closeOverlays(); render();
+  toast("Previous-employer data saved and annualized");
+};
 const ANNUALIST_HEADERS = ["SEQ","TIN","LAST NAME","FIRST NAME","MIDDLE NAME","TYPE","MONTHS",
   "GROSS COMPENSATION","MWE / EXEMPT","13TH MONTH & OTHER BENEFITS","DE MINIMIS",
   "SSS/GSIS/PHIC/HDMF & UNION DUES","TOTAL NON-TAXABLE","TAXABLE COMPENSATION",
@@ -4213,11 +4295,32 @@ function annualizeYear(c, year){
       e.withheld += wtcNum(row[NB+13]);
     });
   });
+  // link each aggregated entry to its masterlist employee (for Date Hired & previous-employer data)
+  const mEmps = c.employees || [];
+  const findEmp = e => mEmps.find(m=> (digits(m.tin) && digits(m.tin) === digits(e.tin)) ) ||
+                       mEmps.find(m=> normName([m.firstName,m.middleName,m.lastName].filter(Boolean).join(" ")) === normName(e.name) ||
+                                      normName([m.lastName,m.firstName,m.middleName].filter(Boolean).join(" ")) === normName(e.name));
+  const prevAll = (c.annPrev || {})[year] || {};
   const list = Object.values(emps).map(e=>{
+    const m = findEmp(e);
+    e.empId = m ? m.id : null;
+    e.dateHired = m ? (m.dateHired || "") : "";
+    // consolidate previous-employer (2316) figures if encoded for this year
+    const pv = e.empId ? prevAll[e.empId] : null;
+    if(pv){
+      e.prev = pv;
+      e.gross    += wtcNum(pv.gross);
+      e.nonTax   += wtcNum(pv.nonTax);
+      e.taxable  += wtcNum(pv.taxable);
+      e.withheld += wtcNum(pv.withheld);
+    }
     const due = annualTax(e.taxable);
     return Object.assign(e, { due, adj: due - e.withheld });   // adj>0 = collectible (under-withheld); <0 = refund
   }).sort((a,b)=> a.name.localeCompare(b.name));
   return { periods, list };
+}
+function annMidYearHires(list, year){                   // hired within the tax year → likely had a previous employer
+  return list.filter(e=> e.dateHired && String(e.dateHired).slice(0,4) === String(year));
 }
 function renderWpAnnualization(R, c){
   const head = `
@@ -4234,12 +4337,20 @@ function renderWpAnnualization(R, c){
     </div></div>`;
   const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
   const { periods, list } = annualizeYear(c, year);
+  const mid = annMidYearHires(list, year);
+  const savedPrev = (c.annPrev || {})[year] || {};
+  const unencoded = mid.filter(e=> !savedPrev[e.empId]);
+  // prompt once per visit when there are mid-year hires without previous-employer data
+  if(mid.length && unencoded.length && !annPrevAutoShown){
+    annPrevAutoShown = true;
+    setTimeout(()=>{ if(view==="wpdetail" && wpSection==="annualization") openAnnPrev(); }, 60);
+  }
   const F = v => Math.abs(v) < 0.005 ? `<span style="color:var(--muted);">—</span>` : wtcFmt(v);
   const tot = list.reduce((a,e)=>({ gross:a.gross+e.gross, nonTax:a.nonTax+e.nonTax, taxable:a.taxable+e.taxable, withheld:a.withheld+e.withheld, due:a.due+e.due, adj:a.adj+e.adj }), { gross:0,nonTax:0,taxable:0,withheld:0,due:0,adj:0 });
   const rows = list.map((e,i)=>`
     <tr>
       <td class="cmeta">${i+1}</td>
-      <td><div class="cname">${escapeHtml(e.name||"—")}</div></td>
+      <td><div class="cname">${escapeHtml(e.name||"—")}${e.prev?` <span class="pill" title="Includes previous employer: ${escapeHtml(e.prev.employer||"prior employer")}">+ prev. employer</span>`:""}</div></td>
       <td class="due ta-c">${escapeHtml(e.tin||"—")}</td>
       <td class="due ta-c">${e.months}</td>
       <td class="due ta-r">${F(e.gross)}</td>
@@ -4255,6 +4366,7 @@ function renderWpAnnualization(R, c){
         ${ddSelect("ddAnnYear", years.map(y=>({v:y,label:"TY "+y})), year, "setAnnYear")}
       </div>
       <div style="flex:1; font-size:.82rem; color:var(--muted); align-self:center;">${periods.length} month${periods.length===1?"":"s"} recorded in ${year} · ${list.length} employee${list.length===1?"":"s"}</div>
+      ${mid.length ? `<button class="btn ghost" onclick="openAnnPrev()">Mid-year hires <span class="pill ${unencoded.length?"":""}" style="${unencoded.length?"background:#fdab3d; color:#fff;":""}">${mid.length}</span></button>` : ""}
       <details class="tax-dd" onclick="event.stopPropagation();">
         <summary class="dl-summary">⬇ Download alphalist <span class="dd-chev">▾</span></summary>
         <div class="tax-dd-pop ct-pop">
