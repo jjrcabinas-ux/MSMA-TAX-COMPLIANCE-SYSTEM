@@ -2628,12 +2628,13 @@ function renderWpDetail(){
       if(wpSection === "computation") return renderWpComputation(R, c);
       if(wpSection === "draft") return renderWpDraft(R, c);
       if(wpSection === "annualization") return renderWpAnnualization(R, c);
+      if(wpSection === "dat") return renderWpDat(R, c);
       const MODULES = [
         {key:"employees",     label:"Employee Masterlist",          desc:"Company employees covered by payroll withholding", ready:true},
         {key:"computation",   label:"Withholding Tax Computation",  desc:"Verify payroll data, then compute withholding",     ready:true},
         {key:"draft",         label:"Draft Return",                 desc:"1601-C drafted from the recorded computation",     ready:true},
         {key:"annualization", label:"Annualization",                desc:"Year-end annualized withholding adjustment",       ready:true},
-        {key:"dat",           label:"DAT File",                     desc:"Alphalist DAT file generation",                    ready:false}
+        {key:"dat",           label:"DAT File",                     desc:"Alphalist DAT file generation",                    ready:true}
       ];
       const modCards = MODULES.map(m=>`
         <div class="ret-card wp-card ${m.ready?"":"wp-dev"}" onclick="${m.ready?`openWpSection('${m.key}')`:`toast('This module is under development')`}">
@@ -4284,6 +4285,55 @@ function renderWpAnnualization(R, c){
     <div class="toolbar" style="margin-top:4px;">
       <div style="flex:1; font-size:.82rem; color:var(--muted);">Figures aggregate each employee's recorded monthly computations for the year. Mid-year hires, previous-employer (2316) amounts, and the ₱90,000 13th-month cap are not yet applied — tell us your annualization sheet's format and we'll model it exactly.</div>
       <button class="btn ghost" onclick="backToWpSections()">← Back to modules</button>
+      ${list.length ? `<button class="btn" onclick="openWpSection('dat')">Proceed to DAT File →</button>` : ""}
+    </div>`;
+}
+/* ---- 1601-C DAT File: the final step, built from the annualized alphalist ---- */
+function renderWpDat(R, c){
+  const head = `
+    <div class="page-head">
+      <h1>DAT File</h1>
+      <button class="btn ghost wp-back" onclick="backToWpSections()">← ${R.form} · ${escapeHtml(c.name)}</button>
+      <div class="sub">${escapeHtml(c.name)} · BIR 1604-C alphalist for submission via the Alphalist Data Entry tool</div>
+    </div>`;
+  const years = [...new Set((c.wtcRecords||[]).map(r=>String(r.period).slice(0,4)))].sort().reverse();
+  if(!years.length) return head + `
+    <div class="card"><div class="attn-empty" style="min-height:190px;">
+      <div>No recorded computations yet for <b>${escapeHtml(c.name)}</b>.<br>The DAT File is built from the annualized figures — record the year's computations first.</div>
+      <button class="btn" style="margin-top:14px;" onclick="openWpSection('computation')">Open Withholding Tax Computation</button>
+    </div></div>`;
+  const year = years.includes(wpAnnYear) ? wpAnnYear : years[0];
+  const { periods, list } = annualizeYear(c, year);
+  const preview = list.length ? annualistRows(list) : [];
+  const fmtN = v => (typeof v === "number") ? (Math.abs(v) < 0.005 ? "—" : wtcFmt(v)) : escapeHtml(v);
+  const bodyRows = preview.map(r=>`<tr>${r.map((v,i)=>`<td class="${i>=7?"ta-r":(i===0||i===5||i===6?"ta-c":"")}">${fmtN(v)}</td>`).join("")}</tr>`).join("");
+  return head + `
+    <div class="toolbar">
+      <div class="scope-select">Tax year
+        ${ddSelect("ddDatYear", years.map(y=>({v:y,label:"TY "+y})), year, "setAnnYear")}
+      </div>
+      <div style="flex:1; font-size:.82rem; color:var(--muted); align-self:center;">${list.length} employee${list.length===1?"":"s"} · ${periods.length} month${periods.length===1?"":"s"} recorded in ${year}</div>
+      <details class="tax-dd" onclick="event.stopPropagation();">
+        <summary class="dl-summary">⬇ Generate alphalist <span class="dd-chev">▾</span></summary>
+        <div class="tax-dd-pop ct-pop">
+          <button class="ct-link" onclick="downloadAnnualist('xlsx')">Excel (.xlsx)</button>
+          <button class="ct-link" onclick="downloadAnnualist('csv')">CSV (.csv)</button>
+        </div>
+      </details>
+    </div>
+    <div class="card">
+      <div class="card-title">Alphalist — TY ${year} <span class="pill">${list.length}</span></div>
+      <div class="wtc-note">This is the annualized alphalist that feeds the BIR <b>1604-C</b> submission. Generate the Excel/CSV to key into or validate against the <b>Alphalist Data Entry</b> tool. The exact machine <b>.DAT</b> export will be wired here once you share one sample .DAT file for the schema.</div>
+      <div class="wtc-scroll" style="max-height:58vh;">
+      <table style="font-size:.8rem;">
+        <thead><tr>${ANNUALIST_HEADERS.map((h,i)=>`<th class="${i>=7?"ta-r":(i===0||i===5||i===6?"ta-c":"")}">${escapeHtml(h)}</th>`).join("")}</tr></thead>
+        <tbody>${bodyRows || `<tr><td colspan="${ANNUALIST_HEADERS.length}" style="text-align:center; color:var(--muted); padding:24px;">No employees in the recorded computations for ${year}.</td></tr>`}</tbody>
+      </table>
+      </div>
+    </div>
+    <div class="toolbar" style="margin-top:4px;">
+      <div style="flex:1;"></div>
+      <button class="btn ghost" onclick="openWpSection('annualization')">← Back to Annualization</button>
     </div>`;
 }
 
