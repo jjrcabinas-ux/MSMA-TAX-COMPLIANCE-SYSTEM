@@ -3026,6 +3026,8 @@ function loadSheetJS(){
     sheetJsPromise = new Promise((res, rej)=>{
       const s = document.createElement("script");
       s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.integrity = "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw";
+      s.crossOrigin = "anonymous";
       s.onload = res;
       s.onerror = ()=>{ sheetJsPromise = null; rej(new Error("SheetJS failed to load")); };
       document.head.appendChild(s);
@@ -3133,13 +3135,16 @@ let jsPdfPromise = null;
 function loadJsPDF(){
   if(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
   if(!jsPdfPromise){
-    const add = src => new Promise((res, rej)=>{
+    const add = (src, sri) => new Promise((res, rej)=>{
       const s = document.createElement("script");
-      s.src = src; s.onload = res; s.onerror = ()=>rej(new Error("script failed: "+src));
+      s.src = src; s.integrity = sri; s.crossOrigin = "anonymous";
+      s.onload = res; s.onerror = ()=>rej(new Error("script failed: "+src));
       document.head.appendChild(s);
     });
-    jsPdfPromise = add("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js")
-      .then(()=> add("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"))
+    jsPdfPromise = add("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+        "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk")
+      .then(()=> add("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js",
+        "sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3"))
       .catch(e=>{ jsPdfPromise = null; throw e; });
   }
   return jsPdfPromise;
@@ -3689,6 +3694,8 @@ function loadPdfLib(){
     pdfLibPromise = new Promise((res, rej)=>{
       const s = document.createElement("script");
       s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js";
+      s.integrity = "sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI";
+      s.crossOrigin = "anonymous";
       s.onload = res; s.onerror = ()=>{ pdfLibPromise = null; rej(new Error("pdf-lib failed")); };
       document.head.appendChild(s);
     });
