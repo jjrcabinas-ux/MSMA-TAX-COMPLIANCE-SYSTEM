@@ -973,13 +973,6 @@
         <span>All information must be based on the client's <b>latest Certificate of Registration (BIR Form 2303)</b>.</span>
       </div>
       <div class="field full">
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:#eff6ff; border:1px dashed var(--accent); border-radius:8px; padding:11px 13px;">
-          <button type="button" class="btn" id="btnCorUpload" onclick="$('corFile').click()">⬆ Upload COR / 2303 to auto-fill</button>
-          <span id="corStatus" style="font-size:.82rem; color:var(--muted);">Reads the file in your browser to fill the fields below. The file is <b>not saved or uploaded</b> — it's discarded right after reading.</span>
-          <input type="file" id="corFile" accept="application/pdf,image/*" style="display:none;" onchange="handleCorUpload(this)">
-        </div>
-      </div>
-      <div class="field full">
         <label>Registered name</label>
         <input id="fName" placeholder="e.g. ABC Trading Corp.">
       </div>
@@ -1031,7 +1024,10 @@
     </div>
     <footer>
       <button class="danger-link" id="btnDeleteClient" style="display:none;">Delete client</button>
+      <span id="corStatus" style="font-size:.76rem; color:var(--muted); align-self:center;"></span>
       <div class="right">
+        <button type="button" class="btn ghost" id="btnCorUpload" onclick="$('corFile').click()" title="Read a COR / BIR 2303 to auto-fill the fields — the file is not saved">⬆ Upload COR</button>
+        <input type="file" id="corFile" accept="application/pdf,image/*" style="display:none;" onchange="handleCorUpload(this)">
         <button class="btn ghost" data-close="clientOverlay">Cancel</button>
         <button class="btn" id="btnSaveClient">Save client</button>
       </div>
