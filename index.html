@@ -2624,6 +2624,39 @@ window.wtcKey = function(ev, el){
     save(); toast(`Cleared ${cells.length} cells`);
   }
 };
+// serialize the selected rectangle as Excel-style TSV (tabs between columns, newlines between rows)
+function wtcSelectionTSV(){
+  if(!wtcSel) return null;
+  const r1 = Math.min(wtcSel.r1, wtcSel.r2), r2 = Math.max(wtcSel.r1, wtcSel.r2);
+  const c1 = Math.min(wtcSel.c1, wtcSel.c2), c2 = Math.max(wtcSel.c1, wtcSel.c2);
+  const lines = [];
+  for(let r = r1; r <= r2; r++){
+    const cols = [];
+    for(let c = c1; c <= c2; c++){
+      const inp = document.querySelector(`input.wtc-cell[data-r="${r}"][data-c="${c}"]`);
+      cols.push(inp ? inp.value : "");                 // locked/identity columns copy as blank
+    }
+    lines.push(cols.join("\t"));
+  }
+  return lines.join("\n");
+}
+window.wtcCopy = function(ev){                          // Ctrl+C on a multi-cell selection
+  if(wtcSelCells().length <= 1) return;                // single cell: let the input copy its own text
+  const tsv = wtcSelectionTSV();
+  if(tsv == null) return;
+  ev.preventDefault();
+  (ev.clipboardData || window.clipboardData).setData("text", tsv);
+};
+window.wtcCut = function(ev){                           // Ctrl+X = copy then clear the source (a move)
+  const cells = wtcSelCells();
+  if(cells.length <= 1) return;
+  const tsv = wtcSelectionTSV();
+  if(tsv == null) return;
+  ev.preventDefault();
+  (ev.clipboardData || window.clipboardData).setData("text", tsv);
+  cells.forEach(inp=>{ inp.value = ""; setManualCell(inp.dataset.emp, +inp.dataset.c, inp, true); });
+  save(); toast(`Cut ${cells.length} cells`);
+};
 window.setWpScope = function(v){ wpScope = v; render(); };
 function renderWorkingPaper(){
   const FREQ_LABEL = { M:"Monthly", Q:"Quarterly", A:"Annual" };
@@ -3657,7 +3690,7 @@ function renderWpComputation(R, c){
                       : `<td class="ta-c" style="color:var(--muted); font-size:.75rem;">auto — from TO</td>`;
           }
           const val = saved[i] != null ? saved[i] : (i === 8 ? fmt2(e.dailyRate) : "");
-          return `<td class="${alignFor(i)}" style="padding:3px 5px;"><input class="wtc-cell ${i>=8?"ta-r":"ta-c"}" value="${escapeHtml(val)}"${i<=2?' placeholder="MM/DD/YYYY"':''} data-emp="${e.id}" data-r="${rIdx}" data-c="${i}" onchange="setManualCell('${e.id}',${i},this)" onmousedown="wtcAnchor(this,event)" onmouseenter="wtcOver(this,event)" onpaste="wtcPaste(event,this)" onkeydown="wtcKey(event,this)"></td>`;
+          return `<td class="${alignFor(i)}" style="padding:3px 5px;"><input class="wtc-cell ${i>=8?"ta-r":"ta-c"}" value="${escapeHtml(val)}"${i<=2?' placeholder="MM/DD/YYYY"':''} data-emp="${e.id}" data-r="${rIdx}" data-c="${i}" onchange="setManualCell('${e.id}',${i},this)" onmousedown="wtcAnchor(this,event)" onmouseenter="wtcOver(this,event)" onpaste="wtcPaste(event,this)" oncopy="wtcCopy(event)" oncut="wtcCut(event)" onkeydown="wtcKey(event,this)"></td>`;
         }).join("")}</tr>`;
       }).join("") : emptyRow;
     }
