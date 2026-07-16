@@ -2754,21 +2754,32 @@ function renderWpDetail(){
 // Aggregate every tracked filing for a return within the scope.
 // scope: "all" (every period) or a year string (that year only).
 // Returns per-record rows too, for the "Needs attention" list.
+// Every applicable filing period for a return: floor → current cycle (skips non-filing months).
+function expectedPeriods(ret){
+  const f = RETURNS[ret].freq;
+  const lastOrd = periodOrd(f, validDefaultPeriod(ret));
+  const out = [];
+  let p = {...MIN_PERIOD[f]}, guard = 0;
+  while(periodOrd(f, p) <= lastOrd && guard++ < 400){
+    if(hasFiling(ret, p)) out.push({...p});
+    p = shiftPeriod(ret, p, 1);
+  }
+  return out;
+}
+// Overview counts the FULL expected universe (every registered client × every applicable
+// period), so the numbers don't depend on which months have been opened in the BIR page.
+// A period with no saved record for a client counts as "not started" (and overdue if past due).
 function summarize(ret, scope){
   const R = RETURNS[ret];
   const s = { total:0, filed:0, prog:0, amber:0, red:0, notStarted:0, periods:0 };
   const rows = [];
-  const prefix = ret + "|";
-  Object.keys(db.records).forEach(k=>{
-    if(!k.startsWith(prefix)) return;
-    const p = parsePeriodKey(ret, k.slice(prefix.length));
+  const clients = clientsFor(R.tax);
+  expectedPeriods(ret).forEach(p=>{
     if(scope !== "all" && String(p.y) !== String(scope)) return;
-    const recs = db.records[k];
-    let any = false;
-    Object.keys(recs).forEach(cid=>{
-      const client = db.clients.find(c=>c.id===cid);
-      if(!client || !(client.taxTypes && client.taxTypes[R.tax])) return; // orphan/unregistered
-      const rec = recs[cid];
+    const recs = db.records[`${ret}|${periodKey(ret,p)}`] || {};
+    if(clients.length) s.periods++;
+    clients.forEach(client=>{
+      const rec = recs[client.id] || { stage:0, dates:{} };
       const f = flagFor(ret, client, p, rec);
       s.total++;
       if(rec.stage>=6) s.filed++;
@@ -2779,9 +2790,7 @@ function summarize(ret, scope){
         rows.push({ f, c:client, ret, p, dl: deadlineFor(ret, client, p).file,
           stageWord: rec.stage===0 ? "Not started" : STEPS[rec.stage-1].label });
       }
-      any = true;
     });
-    if(any) s.periods++;
   });
   return { s, rows };
 }
@@ -2805,17 +2814,14 @@ window.openCompanySummary = function(cid){
   const items = [];
   Object.keys(RETURNS).forEach(ret=>{
     if(!(c.taxTypes && c.taxTypes[RETURNS[ret].tax])) return;
-    const prefix = ret + "|";
-    Object.keys(db.records).forEach(k=>{
-      if(!k.startsWith(prefix)) return;
-      const rec = db.records[k][cid];
-      if(!rec) return;
-      const p = parsePeriodKey(ret, k.slice(prefix.length));
+    expectedPeriods(ret).forEach(p=>{
+      const pk = periodKey(ret, p);
+      const rec = (db.records[`${ret}|${pk}`] || {})[cid] || { stage:0, dates:{} };
       const f = flagFor(ret, c, p, rec);
       const dl = deadlineFor(ret, c, p);
       const stageWord = rec.stage === 0 ? "Not started"
         : rec.stage >= STEPS.length ? "Archived ✓" : STEPS[rec.stage-1].label;
-      items.push({ ret, p, pk: k.slice(prefix.length), f, dl, stageWord });
+      items.push({ ret, p, pk, f, dl, stageWord });
     });
   });
   items.sort((a,b)=> a.f.rank - b.f.rank || ymdInt(a.dl.file.y, a.dl.file.m, a.dl.file.d) - ymdInt(b.dl.file.y, b.dl.file.m, b.dl.file.d));
@@ -3020,18 +3026,18 @@ function renderDashboard(){
       </div>`;
 
   // ---- Company summary (per client, within the selected scope) ----
+  // full expected universe per company, matching the return cards above
   const compMap = {};
+  db.clients.forEach(c=>{ compMap[c.id] = { c, total:0, filed:0, prog:0, amber:0, red:0 }; });
   Object.keys(RETURNS).forEach(ret=>{
-    const prefix = ret + "|";
-    Object.keys(db.records).forEach(k=>{
-      if(!k.startsWith(prefix)) return;
-      const p = parsePeriodKey(ret, k.slice(prefix.length));
-      Object.keys(db.records[k]).forEach(cid=>{
-        const client = db.clients.find(c=>c.id===cid);
-        if(!client || !(client.taxTypes && client.taxTypes[RETURNS[ret].tax])) return;
-        const rec = db.records[k][cid];
+    const clients = clientsFor(RETURNS[ret].tax);
+    if(!clients.length) return;
+    expectedPeriods(ret).forEach(p=>{
+      const recs = db.records[`${ret}|${periodKey(ret,p)}`] || {};
+      clients.forEach(client=>{
+        const rec = recs[client.id] || { stage:0, dates:{} };
         const f = flagFor(ret, client, p, rec);
-        const e = compMap[cid] || (compMap[cid] = { c:client, total:0, filed:0, prog:0, amber:0, red:0 });
+        const e = compMap[client.id];
         e.total++;
         if(rec.stage>=6) e.filed++; else e.prog++;
         if(f.cls==="amber") e.amber++;
@@ -3039,7 +3045,6 @@ function renderDashboard(){
       });
     });
   });
-  db.clients.forEach(c=>{ if(!compMap[c.id]) compMap[c.id] = { c, total:0, filed:0, prog:0, amber:0, red:0 }; });
   const compRows = Object.values(compMap).sort((a,b)=>a.c.name.localeCompare(b.c.name));
   const compBody = compRows.length
     ? `<table>
