@@ -4036,14 +4036,14 @@ function parseCorText(raw){
   // Tax types — detect by FORM CODE and, more OCR-robustly, by the tax-type NAME column
   (flat.match(/\b(1701Q?|1702(?:Q|RT|EX)?|2550[MQ]?|1601C|1604CF?|0619E|1601EQ|1604E|0619F|1601FQ|1602Q|1603Q?|1600(?:VT|WP)?|2000(?:OT)?)\b/g) || [])
     .forEach(code=>{ const t = COR_FORM_TAX[code]; if(t) out.taxTypes[t] = true; });
-  const nameHits = [
+  const nameHits = [                                   // tolerant of OCR letter swaps (WITHH\w* covers WITHHGLDING)
     [/CORPORATE\s+INCOME\s+TAX|INCOME\s+TAX(?:\s+RETURN)?/, "IT"],
-    [/WITHHOLDING\s+TAX[\s\-]*COMPENSATION/, "WTC"],
-    [/WITHHOLDING\s+TAX[\s\-]*EXPANDED/, "EWT"],
-    [/WITHHOLDING\s+TAX[\s\-]*FINAL/, "FWT"],
+    [/WITHH\w*\s*TAX[\s\-]*COMPENSATION/, "WTC"],
+    [/WITHH\w*\s*TAX[\s\-]*EXPANDED/, "EWT"],
+    [/WITHH\w*\s*TAX[\s\-]*FINAL/, "FWT"],
     [/FRINGE\s+BENEFIT/, "FBT"],
     [/DOCUMENTARY\s+STAMP/, "DST"],
-    [/(WITHHOLDING\s+VAT|VALUE\s+ADDED\s+TAX\s+WITHHELD|VAT\s+WITHHELD)/, "WVAT"]
+    [/(WITHH\w*\s*VAT|VALUE\s+ADDED\s+TAX\s+WITHHELD|VAT\s+WITHHELD)/, "WVAT"]
   ];
   nameHits.forEach(([re,t])=>{ if(re.test(flat)) out.taxTypes[t] = true; });
   if(/VALUE[\s\-]*ADDED\s+TAX/.test(flat) && !/WITHHELD/.test(flat)) out.taxTypes["VAT"] = true;
@@ -4052,27 +4052,40 @@ function parseCorText(raw){
   return out;
 }
 function extractCorName(text){
-  const BAD = /\b(TIN|ISSUANCE|REGISTERED|REGISTERING|ADDRESS|TAXPAYER|CERTIFICATE|REVENUE|DISTRICT|OFFICE|BRANCH|HEAD OFFICE|FORM|BUREAU|INTERNAL|REPUBLI|KAWANIHAN|KAGAWARAN|PILIPINAS|OCN|CODE|DIVISION)\b/;
-  const SUFFIX = /\b(INC|INCORPORATED|CORP|CORPORATION|COMPANY|CO|OPC|ENTERPRISES?|ENTERPRISE|TRADING|SERVICES?|HOLDINGS?|INDUSTRIES|PHILIPPINES|PHILS?|LTD|LIMITED|PARTNERSHIP|VENTURES?|SOLUTIONS?|TECHNOLOGIES|SYSTEMS?|GROUP|MANAGEMENT|CONSULTANCY|MARKETING|RESOURCES|ASSOCIATES)\b/;
-  const clean = s => s
-    .replace(/\d{3}\s*-\s*\d{3}\s*-\s*\d{3}\s*-?\s*\d{3,5}/g," ")                         // strip TIN
-    .replace(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s+\d{1,2},?\s*\d{2,4}/gi," ") // strip "March 31, 2011"
-    .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g," ").replace(/\b[X✓]\b/gi," ")
-    .replace(/\s+/g," ").trim();
+  const SUFFIX = /\b(INC|INCORPORATED|CORP|CORPORATION|COMPANY|OPC|ENTERPRISES?|ENTERPRISE|TRADING|HOLDINGS?|INDUSTRIES|PHILIPPINES|PHILS?|LTD|LIMITED|PARTNERSHIP|VENTURES?|SOLUTIONS?|TECHNOLOGIES|SYSTEMS?|GROUP|MARKETING|RESOURCES|ASSOCIATES|BANK|FOODS?|CONSTRUCTION|DEVELOPMENT|REALTY|MANUFACTURING)\b/;
+  // BIR headings / office / label lines that must never be taken as the taxpayer name
+  const OFFICE = /\b(LARGE|TAXPAYERS?|REVENUE|DISTRICT|AUDIT|DIVISION|BUREAU|INTERNAL|KAWANIHAN|KAGAWARAN|REPUBLI\w*|PILIPINAS|PANANALAPI|FINANCE|CERTIFICATE|REGISTRATION|REGISTER\w*|NAME OF|TAX TYPE|FORM TYPE|ISSUANCE|ADDRESS|FILING|BRANCH CODE)\b/i;
+  const TINRE = /\d{3}\s*-\s*\d{3}\s*-\s*\d{3}\s*-?\s*\d{3,5}/;
+  const stripJunk = s => s
+    .replace(/\d{3}\s*-\s*\d{3}\s*-\s*\d{3}\s*-?\s*\d{3,5}/g," ")                          // TIN
+    .replace(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s+\d{1,2},?\s*\d{2,4}/gi," ") // date
+    .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g," ")
+    .replace(/[^A-Za-z0-9&.,'\- ]/g," ").replace(/\s+/g," ").trim();
+  const tidy = s => {
+    let w = stripJunk(s).split(" ").filter(Boolean);
+    while(w.length>1 && /^(L{1,2}|I{1,2}|[IL]{2}|X|CO|—|~|\|)$/i.test(w[0])) w.shift();     // drop leading table-border OCR noise
+    while(w.length>1 && w[w.length-1].replace(/[^A-Za-z0-9]/g,"").length<=1) w.pop();
+    return w.join(" ").trim();
+  };
+  const ok = v => v.length>=4 && v.length<=70 && /[A-Za-z]{3}/.test(v) && !OFFICE.test(v);
   const lines = text.split("\n").map(l=>l.replace(/\s+/g," ").trim()).filter(l=>l.length>3);
-  // 1) label-anchored: truncate at the next field's label, then clean
-  const m = text.match(/NAME OF TAXPAYER[^A-Za-z0-9]*([A-Za-z0-9][^\n]{2,90})/i);
-  if(m){
-    let v = m[1];
-    const cut = v.toUpperCase().search(/\b(TIN|ISSUANCE|REGISTER\w*|BRANCH|HEAD OFFICE|FORM|TAX TYPE|LINE OF BUSINESS)\b/);
-    if(cut === 0) v = "";                              // value slot held a neighbouring label
-    else if(cut > 0) v = v.slice(0, cut);
-    v = clean(v);
-    if(v.length>=3 && !BAD.test(v.toUpperCase()) && /[A-Za-z]{3}/.test(v)) return v;
+  // 1) the taxpayer value row = the line that carries the TIN; the name sits beside it
+  const tinLine = lines.find(l=> TINRE.test(l) && /[A-Za-z]{3}/.test(l.replace(TINRE,"")));
+  if(tinLine){ const v = tidy(tinLine); if(ok(v)) return v; }
+  // 2) a corporate-suffix line that isn't an office/heading line
+  for(const l of lines){
+    if(OFFICE.test(l)) continue;
+    if(SUFFIX.test(l.toUpperCase())){ const v = tidy(l); if(ok(v) && SUFFIX.test(v.toUpperCase())) return v; }
   }
-  // 2) a line carrying a corporate suffix (e.g. "…AMDOCS PHILIPPINES INC…"), cleaned of TIN/date noise
-  const cand = lines.find(l=>{ const u=l.toUpperCase(); return SUFFIX.test(u) && !BAD.test(u) && /[A-Z]{3}/.test(u); });
-  if(cand){ const v = clean(cand); if(v.length>=3 && v.length<=70) return v; }
+  // 3) fallback: value right after the label, minus any neighbouring label text
+  const m = text.match(/NAME OF TAXPAYER[^A-Za-z0-9]*([^\n]{2,90})/i);
+  if(m){
+    let v = m[1].replace(/\|/g," ");
+    const cut = v.toUpperCase().search(/\b(TINISSUANCE|TIN\s*ISSUANCE|TIN|ISSUANCE|DATE|REGISTER\w*|BRANCH|HEAD OFFICE)\b/);
+    if(cut > 0) v = v.slice(0, cut);
+    v = tidy(v);
+    if(ok(v)) return v;
+  }
   return "";
 }
 async function corTextFromFile(file, setStatus){
@@ -4087,19 +4100,24 @@ async function corTextFromFile(file, setStatus){
       layer += tc.items.map(i=>i.str).join(" ") + "\n";
     }
     if(layer.replace(/\s/g,"").length > 40) return layer;
-    // 2) scanned image → OCR page 1 (holds every field we need)
-    setStatus && setStatus("Scanned COR — running text recognition (first time downloads the engine)…");
+    // 2) scanned image → OCR each page (header is on p1; tax types can span p2–p3)
     await loadTesseract();
-    const page = await pdf.getPage(1);
-    const vp = page.getViewport({ scale: 3.0 });       // higher DPI → better digit OCR
-    const cv = document.createElement("canvas");
-    cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
-    const ctx = cv.getContext("2d");
-    ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height);
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
-    cleanWatermark(ctx, cv.width, cv.height);
-    const { data } = await window.Tesseract.recognize(cv, "eng");
-    return data.text;
+    const pages = Math.min(pdf.numPages, 3);
+    let text = "";
+    for(let p = 1; p <= pages; p++){
+      setStatus && setStatus(`Scanned COR — reading page ${p} of ${pages}${p===1?" (first time downloads the engine)":""}…`);
+      const page = await pdf.getPage(p);
+      const vp = page.getViewport({ scale: 3.0 });     // higher DPI → better digit OCR
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+      const ctx = cv.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      cleanWatermark(ctx, cv.width, cv.height);
+      const { data } = await window.Tesseract.recognize(cv, "eng");
+      text += data.text + "\n";
+    }
+    return text;
   }
   // direct image upload → OCR straight away
   setStatus && setStatus("Reading the image (first time downloads the engine)…");
@@ -4140,10 +4158,10 @@ window.handleCorUpload = async function(input){
       setStatus("Couldn't read the details automatically — please enter them manually. (The file was not saved.)");
       return;
     }
-    if(r.name && !$("fName").value.trim()) $("fName").value = r.name;
-    if(r.address && !$("fAddr").value.trim()) $("fAddr").value = r.address;
-    if(r.tin){ $("fTin").value = r.tin; }
-    if(r.rdo && !$("fRdo").value.trim()) $("fRdo").value = r.rdo;
+    if(r.name) $("fName").value = r.name;              // COR is authoritative — overwrite so re-upload refreshes
+    if(r.address) $("fAddr").value = r.address;
+    if(r.tin) $("fTin").value = r.tin;
+    if(r.rdo) $("fRdo").value = r.rdo;
     Object.keys(r.taxTypes).forEach(t=>{ if(TAX_PAGES[t]) setTaxChip(t, true); });
     setStatus(`Captured: ${r.found.join(" · ")}. Please verify against the COR, then Save. (The file was not saved.)`);
     toast("COR read — fields auto-filled; please verify");
